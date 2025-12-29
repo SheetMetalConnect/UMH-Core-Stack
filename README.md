@@ -17,6 +17,8 @@ A ready-to-run Docker Compose stack for [United Manufacturing Hub (UMH)](https:/
 
 This stack extends the [official UMH Docker Compose setup](https://github.com/united-manufacturing-hub/united-manufacturing-hub/pull/2352) with additional tooling for rapid prototyping.
 
+> **Default Password:** All services use `umhcore` as the default password for easy development setup. For production, search and replace all occurrences: `grep -r "umhcore" . --include="*.yaml" --include="*.example" --include="*.md"`
+
 ## Quick Start
 
 ```bash
