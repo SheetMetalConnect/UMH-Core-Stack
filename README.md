@@ -15,6 +15,8 @@ A ready-to-run Docker Compose stack for [United Manufacturing Hub (UMH)](https:/
 | **Portainer** | Container management UI |
 | **NGINX** | Reverse proxy for webhooks |
 
+This stack extends the [official UMH Docker Compose setup](https://github.com/united-manufacturing-hub/united-manufacturing-hub/pull/2352) with additional tooling for rapid prototyping.
+
 ## Quick Start
 
 ```bash
@@ -35,12 +37,25 @@ docker compose -f docker-compose.yaml -f examples/historian/docker-compose.histo
 | Portainer | http://localhost:9000 | Create on first visit |
 | MQTT Broker | localhost:1883 | - |
 
+## Historian Bridge (Pre-Built)
+
+This stack includes a **pre-configured historian bridge** that writes MQTT data to TimescaleDB automatically. It's adapted from the [UMH Classic kafka_to_postgresql_historian_bridge](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/main/deployment/united-manufacturing-hub/templates/bridges/kafka_to_postgres/historian/configmap.yaml).
+
+The bridge is defined in `configs/config.yaml.example` and runs as a UMH Core standalone flow. To enable it:
+
+1. Copy the example config: `cp configs/config.yaml.example data/config.yaml`
+2. Update the database password to match your `HISTORIAN_WRITER_PASSWORD`
+3. Restart UMH Core
+
+See [Historian](docs/historian.md) for schema details and [Historian Flow](docs/historian-flow.md) for customization.
+
 ## Documentation
 
 - [Overview](docs/overview.md) - Architecture and concepts
 - [Operations](docs/operations.md) - Quick start and commands
 - [Networking](docs/networking.md) - Ports, internal DNS, LAN access
-- [Historian](docs/historian.md) - TimescaleDB setup and data flows
+- [Historian](docs/historian.md) - TimescaleDB setup and database schema
+- [Historian Flow](docs/historian-flow.md) - MQTT → TimescaleDB bridge config
 - [Security](docs/security.md) - Production hardening notes
 
 ## Repo Structure

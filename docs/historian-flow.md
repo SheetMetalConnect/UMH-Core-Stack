@@ -1,10 +1,26 @@
 # Historian Flow Configuration
 
-This document provides a ready-to-paste data flow for storing MQTT data in TimescaleDB.
+This stack includes a **pre-built historian bridge** in `configs/config.yaml.example`. For most users, just copy the config and go:
 
-For full historian setup including database schema, Grafana queries, and maintenance, see [Historian Addon README](../examples/historian/README.md).
+```bash
+cp configs/config.yaml.example data/config.yaml
+# Update password to match HISTORIAN_WRITER_PASSWORD, then:
+docker compose restart umh-core
+```
 
-## Quick Setup
+## Background
+
+In UMH Classic (Kubernetes), the `kafka_to_postgresql_historian_bridge` ran automatically as part of the Helm deployment. With UMH Core, data flows are configured via the `config.yaml` file (or Management Console).
+
+This flow is adapted from the [UMH Classic historian bridge](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/main/deployment/united-manufacturing-hub/templates/bridges/kafka_to_postgres/historian/configmap.yaml) — the same Benthos logic that powered the original Kafka-to-TimescaleDB pipeline.
+
+> See also: [UMH Docker Compose documentation](https://github.com/united-manufacturing-hub/united-manufacturing-hub/pull/2352) for the official setup guide.
+
+For database schema and setup, see [Historian Addon](historian.md).
+
+## Manual Setup (Management Console)
+
+If you prefer to configure via the UI instead of `config.yaml`:
 
 1. Open **Management Console** → **Data Flows** → **Standalone** → **Add**
 2. Switch to **Advanced Mode**
@@ -149,6 +165,7 @@ Example: `umh/v1/factory/line1/pump/temperature`
 
 ## See Also
 
-- [Historian Addon](../examples/historian/README.md) - Full setup guide
-- [Historian](historian.md) - Database overview
+- [Historian](historian.md) - Database infrastructure and schema
+- [UMH Classic Bridge Source](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/main/deployment/united-manufacturing-hub/templates/bridges/kafka_to_postgres/historian/configmap.yaml) - Original Benthos config
+- [UMH Standalone Flows Docs](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/main/umh-core/docs/usage/data-flows/stand-alone-flow.md) - Official standalone flow guide
 - [Integrations](integrations.md) - Bridge configuration

@@ -1,0 +1,166 @@
+# ==============================================================================
+# UMH Core Configuration Example
+# ==============================================================================
+# Copy to data/config.yaml and customize:
+#   mkdir -p data && cp configs/config.yaml.example data/config.yaml
+#
+# The agent section is managed by UMH Core on startup.
+# The dataFlow section contains the historian bridge.
+# ==============================================================================
+
+agent:
+    metricsPort: 8080
+    communicator:
+        apiUrl: https://management.umh.app/api
+        authToken: YOUR_AUTH_TOKEN_HERE  # Set via AUTH_TOKEN env var
+    releaseChannel: stable
+    location:
+        0: enterprise
+        1: ""
+        2: ""
+
+internal:
+    redpanda:
+        name: ""
+        desiredState: active
+        redpandaServiceConfig:
+            topic:
+                defaultTopicRetentionMs: 0
+                defaultTopicRetentionBytes: 0
+            resources:
+                maxCores: 0
+                memoryPerCoreInBytes: 0
+            baseDir: ""
+
+# ==============================================================================
+# Historian Bridge - MQTT to TimescaleDB
+# ==============================================================================
+# Adapted from UMH Classic kafka_to_postgresql_historian_bridge
+# https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/main/deployment/united-manufacturing-hub/templates/bridges/kafka_to_postgres/historian/configmap.yaml
+#
+# Prerequisites:
+#   - Historian addon running (docker-compose.historian.yaml)
+#   - Update 'changeme' below to match HISTORIAN_WRITER_PASSWORD from .env
+#
+# To disable: set desiredState to 'stopped'
+# ==============================================================================
+dataFlow:
+  - name: mqtt-to-timescaledb-historian
+    desiredState: active
+    dataFlowComponentConfig:
+      benthos:
+        input:
+          mqtt:
+            urls:
+              - tcp://hivemq:1883
+            topics:
+              - umh/#
+            client_id: umh-historian-bridge
+            clean_session: true
+
+        pipeline:
+          processors:
+            # Extract topic structure and parse payload
+            - bloblang: |
+                let topic = meta("mqtt_topic").or("")
+                let parts = $topic.split("/")
+
+                # Handle umh/v1/<location>/<asset>/<tag> structure
+                let start = if $parts.length() > 1 && $parts.index(0) == "umh" && $parts.index(1) == "v1" {
+                  2
+                } else if $parts.length() > 0 && $parts.index(0) == "umh" {
+                  1
+                } else {
+                  0
+                }
+
+                # Need at least location + asset + tag
+                let has_min = $parts.length() > ($start + 2)
+                let tag = if $has_min { $parts.index(-1) } else { "" }
+                let asset = if $has_min { $parts.index(-2) } else { "" }
+                let location = if $parts.length() > ($start + 2) { $parts.slice($start, -2).join(".") } else { "" }
+
+                # Parse JSON payload, extract value and timestamp
+                let raw = content()
+                let parsed = $raw.parse_json().catch($raw)
+                let value = if $parsed.type() == "object" && $parsed.exists("value") { $parsed.value } else { $parsed }
+                let timestamp = if $parsed.type() == "object" && $parsed.exists("timestamp_ms") {
+                  ($parsed.timestamp_ms / 1000).ts_format()
+                } else if $parsed.type() == "object" && $parsed.exists("timestamp") {
+                  $parsed.timestamp
+                } else {
+                  now().ts_format()
+                }
+
+                root = {
+                  "asset_name": $asset,
+                  "location": $location,
+                  "tag_name": $tag,
+                  "value": $value,
+                  "value_type": $value.type(),
+                  "timestamp": $timestamp
+                }
+
+                # Drop messages without proper structure
+                root = if root.asset_name == "" || root.tag_name == "" { deleted() } else { root }
+
+            # Cache asset IDs to minimize DB queries (like UMH Classic)
+            - label: get_asset_id
+              branch:
+                processors:
+                  - cached:
+                      key: '${! this.location + "|" + this.asset_name }'
+                      cache: asset_id_cache
+                      processors:
+                        - sql_raw:
+                            driver: postgres
+                            dsn: postgres://kafkatopostgresqlv2:changeme@pgbouncer:5432/umh_v2?sslmode=disable
+                            query: |
+                              INSERT INTO asset (asset_name, location)
+                              VALUES ($1, $2)
+                              ON CONFLICT (asset_name) DO UPDATE SET location = EXCLUDED.location
+                              RETURNING id;
+                            args_mapping: '[ this.asset_name, this.location ]'
+                        - bloblang: |
+                            root = if this.length() > 0 { this.index(0).get("id") } else { null }
+                result_map: 'root.asset_id = this'
+
+            # Drop if asset_id lookup failed
+            - switch:
+                - check: this.asset_id == null
+                  processors:
+                    - bloblang: 'root = deleted()'
+
+        output:
+          switch:
+            cases:
+              # Numeric values -> tag table
+              - check: this.value_type == "number"
+                output:
+                  sql_insert:
+                    driver: postgres
+                    dsn: postgres://kafkatopostgresqlv2:changeme@pgbouncer:5432/umh_v2?sslmode=disable
+                    table: tag
+                    columns: [time, asset_id, tag_name, value, origin]
+                    args_mapping: '[ this.timestamp, this.asset_id, this.tag_name, this.value, "mqtt" ]'
+                    suffix: ON CONFLICT (time, asset_id, tag_name) DO NOTHING
+                    batching:
+                      period: 5s
+                      count: 1000
+              # String/other values -> tag_string table
+              - output:
+                  sql_insert:
+                    driver: postgres
+                    dsn: postgres://kafkatopostgresqlv2:changeme@pgbouncer:5432/umh_v2?sslmode=disable
+                    table: tag_string
+                    columns: [time, asset_id, tag_name, value, origin]
+                    args_mapping: '[ this.timestamp, this.asset_id, this.tag_name, this.value.string(), "mqtt" ]'
+                    suffix: ON CONFLICT (time, asset_id, tag_name) DO NOTHING
+                    batching:
+                      period: 5s
+                      count: 1000
+
+        cache_resources:
+          - label: asset_id_cache
+            memory:
+              default_ttl: 24h

@@ -1,9 +1,27 @@
 # Historian Addon (TimescaleDB + PgBouncer + Grafana)
 
-The historian addon is enabled by composing:
-```
+The historian addon provides **time-series storage** with TimescaleDB, connection pooling via PgBouncer, and Grafana for visualization. This stack includes a **pre-built historian bridge** adapted from [UMH Classic](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/main/deployment/united-manufacturing-hub/templates/bridges/kafka_to_postgres/historian/configmap.yaml).
+
+## Enable the Addon
+
+```bash
 docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml up -d
 ```
+
+## Enable the Historian Bridge
+
+The bridge is defined in `configs/config.yaml.example`. To activate:
+
+```bash
+# Copy config (if not already done)
+cp configs/config.yaml.example data/config.yaml
+
+# Update password in data/config.yaml to match HISTORIAN_WRITER_PASSWORD
+# Then restart UMH Core
+docker compose restart umh-core
+```
+
+The bridge subscribes to `umh/#` on HiveMQ and writes to TimescaleDB via PgBouncer.
 
 ## Database
 
@@ -49,9 +67,19 @@ docker exec timescaledb psql -U postgres -d umh_v2 -c "\\du"
 docker exec pgbouncer pg_isready -h pgbouncer
 ```
 
-## Historian Data Flow
+## How the Bridge Works
 
-Use the Management Console to add the MQTT -> TimescaleDB flow. See [Historian Flow](historian-flow.md) for the complete configuration.
+The pre-built historian bridge (in `configs/config.yaml.example`) does the following:
+
+1. **Subscribes** to `umh/#` on HiveMQ
+2. **Parses** topic structure: `umh/v1/<location>/<asset>/<tag>`
+3. **Extracts** value and timestamp from JSON payload
+4. **Resolves** asset IDs (cached to minimize DB queries)
+5. **Inserts** into `tag` (numeric) or `tag_string` (other) hypertables
+
+This is the same logic as the [UMH Classic kafka_to_postgresql_historian_bridge](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/main/deployment/united-manufacturing-hub/templates/bridges/kafka_to_postgres/historian/configmap.yaml), adapted for MQTT input.
+
+For customization details, see [Historian Flow](historian-flow.md).
 
 ## See Also
 
