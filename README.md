@@ -74,6 +74,7 @@ Works out of the box (default password: `umhcore`). See [Historian](docs/histori
 - [Networking](docs/networking.md) - Ports, internal DNS, LAN access
 - [Historian](docs/historian.md) - TimescaleDB setup and database schema
 - [Historian Flow](docs/historian-flow.md) - MQTT → TimescaleDB bridge config
+- [Extensions](docs/extensions.md) - Optional addons (NocoDB, Appsmith, n8n, etc.)
 - [Security](docs/security.md) - Production hardening notes
 
 ## Repo Structure
