@@ -37,17 +37,16 @@ docker compose -f docker-compose.yaml -f examples/historian/docker-compose.histo
 | Portainer | http://localhost:9000 | Create on first visit |
 | MQTT Broker | localhost:1883 | - |
 
-## Historian Bridge (Pre-Built)
+## Historian Bridge
 
-This stack includes a **pre-configured historian bridge** that writes MQTT data to TimescaleDB automatically. It's adapted from the [UMH Classic kafka_to_postgresql_historian_bridge](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/main/deployment/united-manufacturing-hub/templates/bridges/kafka_to_postgres/historian/configmap.yaml).
+This stack includes a **ready-to-paste historian bridge** that writes MQTT data to TimescaleDB. It's adapted from the [UMH Classic kafka_to_postgresql_historian_bridge](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/main/deployment/united-manufacturing-hub/templates/bridges/kafka_to_postgres/historian/configmap.yaml).
 
-The bridge is defined in `configs/config.yaml.example` and runs as a UMH Core standalone flow. To enable it:
+To enable it:
 
-1. Copy the example config: `cp configs/config.yaml.example data/config.yaml`
-2. Update the database password to match your `HISTORIAN_WRITER_PASSWORD`
-3. Restart UMH Core
+1. Open **Management Console** → **Data Flows** → **Standalone** → **Add**
+2. Paste the config from [docs/historian-flow.md](docs/historian-flow.md)
 
-See [Historian](docs/historian.md) for schema details and [Historian Flow](docs/historian-flow.md) for customization.
+Works out of the box (default password: `umhcore`). See [Historian](docs/historian.md) for schema details.
 
 ## Documentation
 

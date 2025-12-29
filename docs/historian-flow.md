@@ -1,16 +1,10 @@
 # Historian Flow Configuration
 
-This stack includes a **pre-built historian bridge** in `configs/config.yaml.example`. For most users, just copy the config and go:
-
-```bash
-cp configs/config.yaml.example data/config.yaml
-# Update password to match HISTORIAN_WRITER_PASSWORD, then:
-docker compose restart umh-core
-```
+Ready-to-paste data flow for writing MQTT data to TimescaleDB.
 
 ## Background
 
-In UMH Classic (Kubernetes), the `kafka_to_postgresql_historian_bridge` ran automatically as part of the Helm deployment. With UMH Core, data flows are configured via the `config.yaml` file (or Management Console).
+In UMH Classic (Kubernetes), the `kafka_to_postgresql_historian_bridge` ran automatically. With UMH Core, you add it via the Management Console.
 
 This flow is adapted from the [UMH Classic historian bridge](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/main/deployment/united-manufacturing-hub/templates/bridges/kafka_to_postgres/historian/configmap.yaml) — the same Benthos logic that powered the original Kafka-to-TimescaleDB pipeline.
 
@@ -18,13 +12,13 @@ This flow is adapted from the [UMH Classic historian bridge](https://github.com/
 
 For database schema and setup, see [Historian Addon](historian.md).
 
-## Manual Setup (Management Console)
-
-If you prefer to configure via the UI instead of `config.yaml`:
+## Setup
 
 1. Open **Management Console** → **Data Flows** → **Standalone** → **Add**
 2. Switch to **Advanced Mode**
 3. Paste the sections below
+
+> Default password is `umhcore`. Change in production.
 
 ## Input
 
@@ -90,7 +84,7 @@ pipeline:
               processors:
                 - sql_raw:
                     driver: postgres
-                    dsn: postgres://kafkatopostgresqlv2:changeme@pgbouncer:5432/umh_v2?sslmode=disable
+                    dsn: postgres://kafkatopostgresqlv2:umhcore@pgbouncer:5432/umh_v2?sslmode=disable
                     query: |
                       INSERT INTO asset (asset_name, location)
                       VALUES ($1, $2)
@@ -118,7 +112,7 @@ output:
         output:
           sql_insert:
             driver: postgres
-            dsn: postgres://kafkatopostgresqlv2:changeme@pgbouncer:5432/umh_v2?sslmode=disable
+            dsn: postgres://kafkatopostgresqlv2:umhcore@pgbouncer:5432/umh_v2?sslmode=disable
             table: tag
             columns: [time, asset_id, tag_name, value, origin]
             args_mapping: '[ this.timestamp, this.asset_id, this.tag_name, this.value, "mqtt" ]'
@@ -128,7 +122,7 @@ output:
       - output:
           sql_insert:
             driver: postgres
-            dsn: postgres://kafkatopostgresqlv2:changeme@pgbouncer:5432/umh_v2?sslmode=disable
+            dsn: postgres://kafkatopostgresqlv2:umhcore@pgbouncer:5432/umh_v2?sslmode=disable
             table: tag_string
             columns: [time, asset_id, tag_name, value, origin]
             args_mapping: '[ this.timestamp, this.asset_id, this.tag_name, this.value, "mqtt" ]'

@@ -10,18 +10,12 @@ docker compose -f docker-compose.yaml -f examples/historian/docker-compose.histo
 
 ## Enable the Historian Bridge
 
-The bridge is defined in `configs/config.yaml.example`. To activate:
+Add the bridge via Management Console:
 
-```bash
-# Copy config (if not already done)
-cp configs/config.yaml.example data/config.yaml
+1. Open **Management Console** → **Data Flows** → **Standalone** → **Add**
+2. Paste the config from [Historian Flow](historian-flow.md)
 
-# Update password in data/config.yaml to match HISTORIAN_WRITER_PASSWORD
-# Then restart UMH Core
-docker compose restart umh-core
-```
-
-The bridge subscribes to `umh/#` on HiveMQ and writes to TimescaleDB via PgBouncer.
+Works out of the box with default password (`umhcore` - change in production). The bridge subscribes to `umh/#` on HiveMQ and writes to TimescaleDB via PgBouncer.
 
 ## Database
 
