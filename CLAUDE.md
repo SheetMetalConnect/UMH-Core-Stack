@@ -16,6 +16,10 @@ Docker Compose stack for [UMH Core](https://github.com/united-manufacturing-hub/
 │   ├── grafana/provisioning/
 │   └── timescaledb-init/
 ├── docs/                   # Documentation
+│   ├── setup.md            # Initial setup guide
+│   ├── historian.md        # TimescaleDB addon
+│   ├── historian-flow.md   # Pre-built historian bridge (dataFlow)
+│   └── networking.md       # Port and service info
 └── examples/historian/     # TimescaleDB + Grafana addon
 ```
 
@@ -66,11 +70,39 @@ Tables in `umh_v2`:
 
 Users:
 - `postgres` - Superuser
-- `kafkatopostgresqlv2` - Writer
-- `grafanareader` - Read-only
+- `kafkatopostgresqlv2` - Writer (password: `umhcore`)
+- `grafanareader` - Read-only (password: `umhcore`)
+
+## Password Convention
+
+All services use `umhcore` as the default password for easy development:
+
+```bash
+# Find all password occurrences for production replacement
+grep -r "umhcore" . --include="*.yaml" --include="*.example" --include="*.md" --include="*.sh"
+```
+
+For production, replace all `umhcore` with secure passwords.
+
+## Historian Bridge (dataFlow)
+
+The historian bridge writes MQTT data to TimescaleDB. It's adapted from UMH Classic's `kafka_to_postgresql_historian_bridge`.
+
+**How to deploy:**
+1. Copy the YAML from `docs/historian-flow.md`
+2. Paste into Management Console under dataFlows
+3. UMH Core automatically deploys the bridge
+
+The bridge uses Benthos/Redpanda Connect components:
+- `mqtt` input - subscribes to `umh/#`
+- `branch` processor with `cached` - caches asset IDs
+- `sql_raw` processor - looks up/creates asset IDs
+- `switch` output - routes numeric→`tag`, string→`tag_string`
+- `sql_insert` output - batched inserts
 
 ## Editing Notes
 
 - Use standard markdown links, not wikilinks
 - Keep `.env.example` updated when adding env vars
 - Test compose changes with `docker compose config`
+- dataFlows are configured via Management Console, not direct config editing
