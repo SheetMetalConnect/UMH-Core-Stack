@@ -34,6 +34,8 @@ This stack extends the [official UMH Docker Compose setup](https://github.com/un
 
 > **Default Password:** All services use `umhcore` as the default password for easy development setup. For production, search and replace all occurrences: `grep -r "umhcore" . --include="*.yaml" --include="*.example" --include="*.md"`
 
+> **Latest Images:** All services use `:latest` tags for easy updates. Run `docker compose pull` regularly to get the newest versions.
+
 ## Quick Start
 
 ```bash
