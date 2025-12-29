@@ -91,7 +91,7 @@ services:
     environment:
       # Admin credentials (change on first login)
       - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:-umhcore}
       - POSTGRES_DB=${POSTGRES_DB:-umh_v2}
       - HISTORIAN_READER_USER=${HISTORIAN_READER_USER:-grafanareader}
       - HISTORIAN_READER_PASSWORD=${HISTORIAN_READER_PASSWORD:-umhcore}

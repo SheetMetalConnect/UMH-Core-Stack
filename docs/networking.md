@@ -368,7 +368,7 @@ docker compose -f docker-compose.yaml -f examples/historian/docker-compose.histo
 
 | Service | Username | Password |
 |---------|----------|----------|
-| Grafana | admin | admin |
+| Grafana | admin | umhcore |
 | PostgreSQL | postgres | umhcore |
 | PgBouncer writer | kafkatopostgresqlv2 | umhcore |
 | PgBouncer reader | grafanareader | umhcore |

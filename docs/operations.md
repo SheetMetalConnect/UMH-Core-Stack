@@ -55,7 +55,7 @@ create bridges and historian flows in the Management Console.
 | Service | URL | Default Credentials |
 |---------|-----|---------------------|
 | NGINX (webhooks) | http://localhost:8081 | - |
-| Grafana | http://localhost:3000 | admin / admin |
+| Grafana | http://localhost:3000 | admin / umhcore |
 | Node-RED | http://localhost:1880 | - |
 | Portainer | http://localhost:9000 | Create on first visit |
 | MQTT | tcp://localhost:1883 | No auth (dev mode) |

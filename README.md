@@ -8,14 +8,29 @@ A ready-to-run Docker Compose stack for [United Manufacturing Hub (UMH)](https:/
 |-----------|---------|
 | **UMH Core** | Edge gateway with embedded Kafka (Redpanda) and Unified Namespace |
 | **HiveMQ CE** | MQTT broker for device connectivity |
-| **Node-RED** | Flow-based programming and data transformation |
+| **Node-RED** | Flow-based programming with Projects + Multiplayer enabled |
 | **TimescaleDB** | Time-series database for historian storage |
-| **Grafana** | Dashboards and visualization |
+| **Grafana** | Dashboards with TimescaleDB datasource pre-configured |
 | **PgBouncer** | Database connection pooling |
 | **Portainer** | Container management UI |
 | **NGINX** | Reverse proxy for webhooks |
 
 This stack extends the [official UMH Docker Compose setup](https://github.com/united-manufacturing-hub/united-manufacturing-hub/pull/2352) with additional tooling for rapid prototyping.
+
+## Pre-configured Features
+
+**Node-RED** (`configs/nodered/settings.js`):
+- **Projects**: Git-backed flow versioning enabled
+- **Multiplayer**: Real-time collaboration mode enabled
+- **External Modules**: Install npm packages directly in function nodes
+
+**Grafana** (`configs/grafana/provisioning/`):
+- **TimescaleDB Datasource**: Auto-provisioned on startup, ready to query
+
+**TimescaleDB** (`configs/timescaledb-init/`):
+- **Schema**: `asset`, `tag`, `tag_string` tables with hypertables
+- **Users**: Writer (`kafkatopostgresqlv2`) and reader (`grafanareader`) pre-created
+- **Compression**: Automatic after 7 days
 
 > **Default Password:** All services use `umhcore` as the default password for easy development setup. For production, search and replace all occurrences: `grep -r "umhcore" . --include="*.yaml" --include="*.example" --include="*.md"`
 
@@ -35,7 +50,7 @@ docker compose -f docker-compose.yaml -f examples/historian/docker-compose.histo
 | Service | URL | Credentials |
 |---------|-----|-------------|
 | Node-RED | http://localhost:1880 | - |
-| Grafana | http://localhost:3000 | admin / admin |
+| Grafana | http://localhost:3000 | admin / umhcore |
 | Portainer | http://localhost:9000 | Create on first visit |
 | MQTT Broker | localhost:1883 | - |
 

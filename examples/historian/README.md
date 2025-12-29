@@ -72,7 +72,7 @@ umh-core      ghcr.io/united-manufacturing-hub/umh-core    Up (healthy)
 
 Visit: http://localhost:3000
 - Username: `admin`
-- Password: `admin` (change on first login)
+- Password: `umhcore` (change on first login)
 Grafana auto-provisions the TimescaleDB datasource via `configs/grafana/provisioning`.
 
 ### 6. Verify Installation
@@ -416,7 +416,7 @@ For production, remove port 5432 mapping in `docker-compose.historian.yaml` and 
 
 ### Grafana Access
 
-Change admin password immediately on first login (http://localhost:3000).
+Change admin password immediately on first login.
 
 ---
 

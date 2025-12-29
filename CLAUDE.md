@@ -50,6 +50,21 @@ docker compose -f docker-compose.yaml -f examples/historian/docker-compose.histo
 | TimescaleDB | (internal) | `timescaledb:5432` |
 | UMH Core | (internal) | `umh-core:8040` |
 
+## Pre-configured Features
+
+**Node-RED** (`configs/nodered/settings.js`):
+- Projects enabled (Git-backed flow versioning)
+- Multiplayer enabled (real-time collaboration)
+- External modules allowed in function nodes
+
+**Grafana** (`configs/grafana/provisioning/`):
+- TimescaleDB datasource auto-provisioned
+
+**TimescaleDB** (`configs/timescaledb-init/`):
+- Schema with `asset`, `tag`, `tag_string` hypertables
+- Writer/reader users pre-created
+- Compression enabled (7 days)
+
 ## Gitignored (local only)
 
 - `.env` - Contains AUTH_TOKEN
