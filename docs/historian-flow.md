@@ -153,7 +153,7 @@ Example: `umh/v1/factory/line1/pump/temperature`
 
 ## Notes
 
-- Replace `changeme` with your actual `HISTORIAN_WRITER_PASSWORD` from `.env`
+- Default password is `umhcore` - change in production
 - PgBouncer (`pgbouncer:5432`) is the database endpoint
 - Numeric values go to `tag` table, strings go to `tag_string`
 

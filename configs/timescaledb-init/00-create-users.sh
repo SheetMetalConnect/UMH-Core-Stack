@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-writer_password="${HISTORIAN_WRITER_PASSWORD:-changeme}"
-reader_password="${HISTORIAN_READER_PASSWORD:-changeme}"
+writer_password="${HISTORIAN_WRITER_PASSWORD:-umhcore}"
+reader_password="${HISTORIAN_READER_PASSWORD:-umhcore}"
 
 psql -v ON_ERROR_STOP=1 \
   --username "${POSTGRES_USER:-postgres}" \

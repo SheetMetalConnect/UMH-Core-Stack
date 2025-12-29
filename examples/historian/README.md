@@ -38,9 +38,9 @@ cat .env.historian.example >> .env
 
 ```bash
 # In .env file, change:
-POSTGRES_PASSWORD=changeme  # Use: openssl rand -base64 32
-HISTORIAN_WRITER_PASSWORD=changeme
-HISTORIAN_READER_PASSWORD=changeme
+POSTGRES_PASSWORD=umhcore  # Change in production
+HISTORIAN_WRITER_PASSWORD=umhcore
+HISTORIAN_READER_PASSWORD=umhcore
 
 Set credentials before first boot; init scripts apply them only once.
 ```
