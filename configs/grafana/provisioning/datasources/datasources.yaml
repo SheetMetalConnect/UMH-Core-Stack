@@ -1,0 +1,22 @@
+# Grafana Datasource Provisioning
+# Auto-configures TimescaleDB connection on startup
+
+apiVersion: 1
+
+datasources:
+  - name: TimescaleDB
+    type: postgres
+    url: pgbouncer:5432
+    database: ${POSTGRES_DB:-umh_v2}
+    user: ${HISTORIAN_READER_USER:-grafanareader}
+    secureJsonData:
+      password: ${HISTORIAN_READER_PASSWORD:-changeme}
+    jsonData:
+      sslmode: disable
+      maxOpenConns: 10
+      maxIdleConns: 10
+      connMaxLifetime: 14400
+      postgresVersion: 1700
+      timescaledb: true
+    isDefault: true
+    editable: true

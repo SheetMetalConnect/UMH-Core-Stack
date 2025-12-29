@@ -1,0 +1,134 @@
+# ==============================================================================
+# UMH Core Full Stack Deployment (PR #2340-aligned)
+# ==============================================================================
+# Core: UMH Core + NGINX reverse proxy
+# Extras: HiveMQ CE + Node-RED + Portainer
+# Optional historian addon: examples/historian (TimescaleDB + Grafana)
+# ==============================================================================
+
+services:
+  # ============================================================================
+  # UMH Core - Edge Gateway
+  # ============================================================================
+  umh-core:
+    image: management.umh.app/oci/united-manufacturing-hub/umh-core:${UMH_VERSION:-latest}
+    container_name: umh-core
+    restart: unless-stopped
+
+    # Security: Run as non-root user (UID 1000) if your Docker host supports it
+    # user: "1000:1000"
+
+    environment:
+      - AUTH_TOKEN=${AUTH_TOKEN:?AUTH_TOKEN is required}
+      - RELEASE_CHANNEL=${RELEASE_CHANNEL:-stable}
+      - API_URL=${API_URL:-https://management.umh.app/api}
+      - LOCATION_0=${LOCATION_0:-enterprise}
+      - LOCATION_1=${LOCATION_1:-}
+      - LOCATION_2=${LOCATION_2:-}
+
+    volumes:
+      # CRITICAL: ./data must be writable by UID 1000
+      - ./data:/data
+
+    networks:
+      - umh-network
+
+  # ============================================================================
+  # NGINX - Reverse Proxy (security layer + webhook routing)
+  # ============================================================================
+  nginx:
+    image: docker.io/library/nginx:alpine
+    container_name: nginx
+    restart: unless-stopped
+
+    ports:
+      - "${PORT_NGINX:-8081}:8080"
+
+    volumes:
+      - ./configs/nginx.conf:/etc/nginx/nginx.conf:ro
+
+    networks:
+      - umh-network
+
+    depends_on:
+      - umh-core
+
+  # ============================================================================
+  # HiveMQ CE - MQTT Broker
+  # ============================================================================
+  hivemq:
+    image: docker.io/hivemq/hivemq-ce:latest
+    container_name: hivemq
+    restart: unless-stopped
+    environment:
+      - HIVEMQ_ALLOW_ALL_CLIENTS=true
+      - JAVA_OPTS=-Xmx512m -Xms256m
+    ports:
+      - "${PORT_MQTT:-1883}:1883"
+      - "${PORT_MQTT_WS:-8083}:8000"
+    volumes:
+      - hivemq-data:/opt/hivemq/data
+      - hivemq-extensions:/opt/hivemq/extensions
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "bash -c 'exec 3<>/dev/tcp/127.0.0.1/1883 && exec 4<>/dev/tcp/127.0.0.1/8000'",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - umh-network
+
+  # ============================================================================
+  # Node-RED - Flow-Based Programming
+  # ============================================================================
+  nodered:
+    image: docker.io/nodered/node-red:latest
+    container_name: nodered
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-Europe/Amsterdam}
+    ports:
+      - "${PORT_NODERED:-1880}:1880"
+    volumes:
+      - nodered-data:/data
+      - ./configs/nodered/settings.js:/data/settings.js:ro
+    networks:
+      - umh-network
+
+  # ============================================================================
+  # Portainer - Container Management UI
+  # ============================================================================
+  portainer:
+    image: docker.io/portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    ports:
+      - "${PORT_PORTAINER:-9000}:9000"
+      - "${PORT_PORTAINER_EDGE:-9443}:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer-data:/data
+    networks:
+      - umh-network
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  umh-network:
+    driver: bridge
+
+# ==============================================================================
+# Volumes
+# ==============================================================================
+volumes:
+  hivemq-data: {}
+  hivemq-extensions: {}
+  nodered-data: {}
+  portainer-data: {}

@@ -1,0 +1,5 @@
+united-manufacturing-hub/
+
+# Local environment (contains AUTH_TOKEN)
+.env
+data/
