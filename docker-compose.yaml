@@ -53,6 +53,13 @@ services:
     depends_on:
       - umh-core
 
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   # ============================================================================
   # HiveMQ CE - MQTT Broker
   # ============================================================================
@@ -98,6 +105,12 @@ services:
       - ./configs/nodered/settings.js:/data/settings.js:ro
     networks:
       - umh-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:1880/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # ============================================================================
   # Portainer - Container Management UI
@@ -116,6 +129,12 @@ services:
       - portainer-data:/data
     networks:
       - umh-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9000/api/system/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 # ==============================================================================
 # Networks
