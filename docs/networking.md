@@ -207,6 +207,24 @@ server {
 }
 ```
 
+### SSL/TLS Termination
+
+When NGINX handles SSL/TLS termination (HTTPS), umh-core needs to accept forwarded requests from the proxy. Add this environment variable to umh-core:
+
+```yaml
+services:
+  umh-core:
+    environment:
+      - ALLOW_INSECURE_TLS=true
+```
+
+This tells umh-core to trust the `X-Forwarded-Proto` header from NGINX, allowing it to properly handle requests that were originally HTTPS but arrive as HTTP after proxy termination.
+
+**When to use:**
+- NGINX terminates SSL (listens on 443 with certificates)
+- Requests are forwarded to umh-core over HTTP internally
+- You need umh-core to recognize the original protocol was HTTPS
+
 ## MQTT Architecture
 
 ### External vs Internal Access
