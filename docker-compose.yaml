@@ -77,6 +77,13 @@ services:
     volumes:
       - nodered-data:/data
       - ./configs/nodered/settings.js:/data/settings.js:ro
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        cd /data && \
+        npm install --no-audit --no-update-notifier --no-fund --save --omit=dev @node-red-contrib-themes/theme-collection && \
+        node-red
     networks:
       - umh-network
     healthcheck:
