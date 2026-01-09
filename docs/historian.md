@@ -13,7 +13,7 @@ docker compose -f docker-compose.yaml -f examples/historian/docker-compose.histo
 Add the bridge via Management Console:
 
 1. Open **Management Console** → **Data Flows** → **Standalone** → **Add**
-2. Paste the config from [Historian Flow](historian-flow.md)
+2. Paste the config from `examples/databridges/flows/historian.yaml`
 
 Works out of the box with default password (`umhcore` - change in production). The bridge subscribes to `umh/#` on HiveMQ and writes to TimescaleDB via PgBouncer.
 
@@ -63,7 +63,7 @@ docker exec pgbouncer pg_isready -h pgbouncer
 
 ## How the Bridge Works
 
-The pre-built historian bridge (in `configs/config.yaml.example`) does the following:
+The pre-built historian bridge does the following:
 
 1. **Subscribes** to `umh/#` on HiveMQ
 2. **Parses** topic structure: `umh/v1/<location>/<asset>/<tag>`
@@ -73,11 +73,11 @@ The pre-built historian bridge (in `configs/config.yaml.example`) does the follo
 
 This is the same logic as the [UMH Classic kafka_to_postgresql_historian_bridge](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/main/deployment/united-manufacturing-hub/templates/bridges/kafka_to_postgres/historian/configmap.yaml), adapted for MQTT input.
 
-For customization details, see [Historian Flow](historian-flow.md).
+For the complete flow configuration, see `examples/databridges/flows/historian.yaml`.
 
 ## See Also
 
-- [Historian Flow](historian-flow.md) - Complete MQTT to TimescaleDB config
+- `examples/databridges/flows/historian.yaml` - Complete MQTT to TimescaleDB config
 - [Networking](networking.md) - Database access and PgBouncer
 - [Operations](operations.md) - Quick start and commands
 - [Integrations](integrations.md) - Bridge configuration

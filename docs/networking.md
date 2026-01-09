@@ -47,7 +47,7 @@ This document describes the internal and external networking architecture of the
 
 ## Docker Networks
 
-The stack uses two Docker networks for security isolation:
+The stack uses two Docker networks for security isolation. UMH Core is run as a separate container and must be attached to the application network so NGINX, HiveMQ, and PgBouncer can reach it.
 
 ### umh-network (Bridge)
 
@@ -55,13 +55,13 @@ The primary network connecting all services that need to communicate with each o
 
 | Service | Connected | Purpose |
 |---------|-----------|---------|
-| umh-core | Yes | Edge gateway with embedded Kafka (Redpanda) |
 | nginx | Yes | Reverse proxy for webhook endpoints |
 | hivemq | Yes | MQTT broker |
 | nodered | Yes | Flow-based automation |
 | portainer | Yes | Container management UI |
 | grafana | Yes | Visualization dashboards |
 | pgbouncer | Yes | Database connection pooler (bridges to timescaledb-network) |
+| umh-core (external container) | Attach manually | Edge gateway with embedded Kafka (Redpanda) |
 
 ### timescaledb-network (Internal)
 
@@ -93,6 +93,9 @@ These ports are published to the host and accessible from LAN:
 | Portainer Edge | 9443 | `PORT_PORTAINER_EDGE` | `PORT_PORTAINER_EDGE` | 9443 |
 | Grafana | 3000 | 3000 | (fixed) | 3000 |
 | PgBouncer | 5432 | 5432 | (fixed) | 5432 |
+| **MCP Addon (optional)** | | | | |
+| PostgreSQL MCP Server | `MCP_POSTGRES_PORT` | `MCP_POSTGRES_PORT` | `MCP_POSTGRES_PORT` | 3003 |
+| UMH Core (external container) | 8040, 8051 | not published | n/a | internal only |
 
 ### Internal Ports (Not Exposed)
 
@@ -100,9 +103,30 @@ These ports are only accessible within the Docker network:
 
 | Service | Internal Port | Purpose |
 |---------|--------------|---------|
-| umh-core | 8040 | HTTP/Webhook input (proxied via NGINX) |
-| umh-core | 8051 | Management/GraphQL endpoints |
+| umh-core (external container) | 8040 | HTTP/Webhook input (proxied via NGINX) |
+| umh-core (external container) | 8051 | Management/GraphQL endpoints |
 | timescaledb | 5432 | PostgreSQL (only via PgBouncer) |
+
+### Running UMH Core separately (attach to network)
+
+Launch UMH Core outside the compose stack and attach it to the app network so NGINX/HiveMQ/PgBouncer can reach it:
+
+```bash
+docker run -d --restart unless-stopped --name umh-core \
+  --network lve-umh-core_umh-network \
+  -v umh-core-data:/data \
+  -e AUTH_TOKEN=${AUTH_TOKEN} \
+  -e RELEASE_CHANNEL=${RELEASE_CHANNEL:-stable} \
+  -e API_URL=${API_URL:-https://management.umh.app/api} \
+  -e LOCATION_0=${LOCATION_0:-enterprise} \
+  management.umh.app/oci/united-manufacturing-hub/umh-core:${UMH_VERSION:-latest}
+```
+
+If UMH Core is already running, attach it:
+
+```bash
+docker network connect lve-umh-core_umh-network umh-core
+```
 
 ## Service Discovery (Internal DNS)
 
@@ -143,6 +167,8 @@ All services are reachable from the LAN via the host's IP and published ports:
 | MQTT WebSocket | `ws://<host-ip>:8083/mqtt` | `ws://192.168.1.100:8083/mqtt` |
 | Webhook Endpoint | `http://<host-ip>:8081` | `http://192.168.1.100:8081` |
 | Database (via PgBouncer) | `postgresql://<host-ip>:5432` | `postgresql://192.168.1.100:5432/umh_v2` |
+| **MCP Addon (optional)** | | |
+| PostgreSQL MCP Server | `http://<host-ip>:3003` | `http://192.168.1.100:3003` |
 
 ### Finding Your Host IP
 
@@ -253,7 +279,7 @@ Port: 1883
 
 3. Data enters Unified Namespace
    Topic: umh.v1.<LOCATION_0>.<LOCATION_1>.<LOCATION_2>/...
-   Example: umh.v1.Singeling/my/sensor/topic
+   Example: umh.v1.Sittard/my/sensor/topic
 ```
 
 ## Database Access Architecture
@@ -433,9 +459,68 @@ UMH Core might not be ready. Check its logs:
 docker logs umh-core --tail 50
 ```
 
+## MCP (Model Context Protocol) Addon Architecture
+
+The optional MCP addon integrates AI assistants with Node-RED and Grafana via standardized MCP servers.
+
+### MCP Network Architecture
+
+```
+AI Client (Claude Desktop, VSCode, etc.)
+        ↓ HTTP/MCP Protocol
+<host-ip>:3001 (Node-RED MCP Server)
+<host-ip>:3002 (Grafana MCP Server)  
+        ↓ Docker Bridge (umh-network)
+nodered-mcp:3001 → nodered:1880/api (Node-RED API)
+grafana-mcp:3002 → grafana:3000/api (Grafana API)
+        ↓ Existing data flow
+pgbouncer:5432 → timescaledb:5432 (pre-configured datasource)
+```
+
+### MCP Data Flow
+
+1. **AI Query**: "Create a Grafana dashboard for machine temperature data"
+2. **MCP Server**: Receives request, authenticates with Grafana
+3. **Grafana API**: Queries TimescaleDB via pre-configured datasource 
+4. **Response**: Dashboard created with live data from UMH historian
+
+### MCP Security & Authentication
+
+**Node-RED MCP Server:**
+- Internal connection: `http://nodered:1880`
+- Authentication: HTTP Basic (if Node-RED auth enabled)
+- API access: Full Node-RED admin API
+
+**Grafana MCP Server:**
+- Internal connection: `http://grafana:3000`
+- Authentication: Service Account Token (preferred) or admin credentials
+- Datasource: Pre-configured TimescaleDB via PgBouncer
+- API access: Dashboard creation, queries, configuration
+
+### MCP Usage Examples
+
+**Node-RED Integration:**
+```bash
+# AI prompt examples
+"Create a flow that reads from umh/temperature and stores in TimescaleDB"
+"Debug this Node-RED flow that's not receiving MQTT messages"
+"Generate documentation for all flows in this workspace"
+```
+
+**Grafana Integration:**
+```bash
+# AI prompt examples
+"Show me temperature trends from the last 24 hours"  
+"Create alerts for machine downtime detection"
+"Build a dashboard for OEE calculation from production data"
+```
+
+The MCP servers leverage the existing network isolation and pre-configured connections, ensuring secure AI access to your industrial data stack.
+
 ## See Also
 
 - [Overview](overview.md) - Architecture and data flow
 - [Operations](operations.md) - Quick start and commands
 - [Integrations](integrations.md) - Bridge and Node-RED configuration
 - [Security](security.md) - Production hardening
+- [MCP Addon](../examples/mcp/README.md) - AI/LLM integration setup

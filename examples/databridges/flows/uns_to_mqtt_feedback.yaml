@@ -1,0 +1,42 @@
+# ==============================================================================
+# UNS to MQTT Feedback Flow
+# ==============================================================================
+# Publishes state changes back to MQTT for external subscribers.
+#
+# Type: Stand-alone Flow (dataFlow)
+#
+# Forwards: .create, .update, .duplicate (NOT .delete)
+# ==============================================================================
+
+dataFlow:
+  - name: uns-to-mqtt-feedback
+    desiredState: active
+    dataFlowComponentConfig:
+      benthos:
+        input:
+          uns:
+            umh_topics:
+              - "umh\\.v1\\..*\\._sales_order\\.(create|update|duplicate)"
+            consumer_group: uns_to_mqtt_feedback
+
+        pipeline:
+          processors:
+            - bloblang: |
+                let umh_topic = meta("umh_topic")
+                let action = $umh_topic.split(".").index(-1)
+                
+                root = if $action == "create" || $action == "update" || $action == "duplicate" {
+                  this
+                } else {
+                  deleted()
+                }
+                
+                meta mqtt_topic = $umh_topic.replace(".", "/")
+
+        output:
+          mqtt:
+            urls:
+              - tcp://hivemq:1883
+            client_id: uns_to_mqtt_feedback
+            dynamic_client_id_suffix: nanoid
+            topic: ${! meta("mqtt_topic") }

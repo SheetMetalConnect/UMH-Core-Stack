@@ -7,6 +7,7 @@ Docker Compose stack for [UMH Core](https://github.com/united-manufacturing-hub/
 ```
 .
 ├── README.md               # Public intro
+├── PROJECT.md              # Project overview and goals
 ├── CLAUDE.md               # Agent instructions (you are here)
 ├── docker-compose.yaml     # Core stack
 ├── .env.example            # Environment template
@@ -16,24 +17,33 @@ Docker Compose stack for [UMH Core](https://github.com/united-manufacturing-hub/
 │   ├── grafana/provisioning/
 │   └── timescaledb-init/
 ├── docs/                   # Documentation
-│   ├── setup.md            # Initial setup guide
+│   ├── integration-patterns.md  # Pattern A/B/C explanation
 │   ├── historian.md        # TimescaleDB addon
-│   ├── historian-flow.md   # Pre-built historian bridge (dataFlow)
-│   └── networking.md       # Port and service info
-└── examples/historian/     # TimescaleDB + Grafana addon
+│   ├── networking.md       # Port and service info
+│   └── ...
+└── examples/
+    ├── databridges/
+    │   ├── README.md
+    │   ├── flows/          # UMH Core flows (6 yaml files)
+    │   ├── sql/            # Database schema (02-erp-schema.sql)
+    │   └── classic/        # Reference: k8s format (5 yaml + README)
+    └── historian/          # TimescaleDB + Grafana addon
 ```
 
 ## Commands
 
 ```bash
-# Start full stack (core + historian)
-docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml up -d
+# Start full stack (core + historian + MCP for AI development)
+docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml -f examples/mcp/docker-compose.mcp.yaml up -d
 
 # View logs
-docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml logs -f
+docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml -f examples/mcp/docker-compose.mcp.yaml logs -f
 
 # Stop
-docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml down
+docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml -f examples/mcp/docker-compose.mcp.yaml down
+
+# Start without MCP (production)
+docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml up -d
 ```
 
 ## Services & Ports
@@ -49,6 +59,23 @@ docker compose -f docker-compose.yaml -f examples/historian/docker-compose.histo
 | PgBouncer | 5432 | `pgbouncer:5432` |
 | TimescaleDB | (internal) | `timescaledb:5432` |
 | UMH Core | (internal) | `umh-core:8040` |
+| **MCP Addon (AI Integration)** | | |
+| Node-RED MCP | 3001 | `nodered-mcp:3001` |
+| Grafana MCP | 3002 | `grafana-mcp:3002` |
+
+**Note**: NGINX listens on port 8080 internally but is exposed as port 8081 externally.
+
+## Networking
+
+Docker Compose automatically prefixes network names with the project directory name:
+- Directory name: `lve-umh-core` (or your local directory name)
+- Network defined in compose: `umh-network`
+- Actual network name: `lve-umh-core_umh-network`
+
+UMH Core (running as separate container) must connect using the prefixed network name:
+```bash
+docker network ls | grep umh  # Find exact network name
+```
 
 ## Pre-configured Features
 
@@ -59,16 +86,27 @@ docker compose -f docker-compose.yaml -f examples/historian/docker-compose.histo
 
 **Grafana** (`configs/grafana/provisioning/`):
 - TimescaleDB datasource auto-provisioned
+- Connects via PgBouncer connection pooler
+- Credentials from environment variables
 
 **TimescaleDB** (`configs/timescaledb-init/`):
 - Schema with `asset`, `tag`, `tag_string` hypertables
+- ERP schema with `erp_sales_order`, `erp_sales_order_history` tables (requires running sql/02-erp-schema.sql)
 - Writer/reader users pre-created
 - Compression enabled (7 days)
+- Automatic hypertable partitioning
+
+**NGINX** (`configs/nginx.conf`):
+- Reverse proxy for UMH Core webhooks
+- Security headers (X-Frame-Options, X-Content-Type-Options, X-XSS-Protection)
+- CORS enabled (allows `*` - restrict in production)
+- Proxies to `umh-core:8040`
 
 ## Gitignored (local only)
 
-- `.env` - Contains AUTH_TOKEN
+- `.env` - Contains AUTH_TOKEN and passwords
 - `data/` - Runtime data, logs, config.yaml
+- `.DS_Store` - macOS filesystem metadata
 
 ## External Resources
 
@@ -82,9 +120,11 @@ Tables in `umh_v2`:
 - `asset` - Asset metadata
 - `tag` - Numeric time-series
 - `tag_string` - Text time-series
+- `erp_sales_order` - Current ERP state (Pattern C)
+- `erp_sales_order_history` - Full change history (Pattern C)
 
 Users:
-- `postgres` - Superuser
+- `postgres` - Superuser (password: `umhcore`)
 - `kafkatopostgresqlv2` - Writer (password: `umhcore`)
 - `grafanareader` - Read-only (password: `umhcore`)
 
@@ -97,23 +137,83 @@ All services use `umhcore` as the default password for easy development:
 grep -r "umhcore" . --include="*.yaml" --include="*.example" --include="*.md" --include="*.sh"
 ```
 
-For production, replace all `umhcore` with secure passwords.
+For production, replace all `umhcore` with secure passwords. Generate with:
+```bash
+openssl rand -base64 32
+```
 
-## Historian Bridge (dataFlow)
+## Data Flows (Bridges)
 
-The historian bridge writes MQTT data to TimescaleDB. It's adapted from UMH Classic's `kafka_to_postgresql_historian_bridge`.
+All flows are in `examples/databridges/flows/`. Deploy via Management Console:
+
+| Flow | Purpose |
+|------|---------|
+| `historian.yaml` | UNS → TimescaleDB (time-series) |
+| `mqtt_to_uns_bridge.yaml` | External MQTT → UNS |
+| `sales_order_process.yaml` | Deduplication logic |
+| `sales_order_to_timescale.yaml` | Persist + history tracking |
+| `timescale_delete.yaml` | Delete handling |
+| `uns_to_mqtt_feedback.yaml` | State change notifications |
 
 **How to deploy:**
-1. Copy the YAML from `docs/historian-flow.md`
+1. Copy the YAML from `examples/databridges/flows/<flow-name>.yaml`
 2. Paste into Management Console under dataFlows
 3. UMH Core automatically deploys the bridge
 
-The bridge uses Benthos/Redpanda Connect components:
-- `mqtt` input - subscribes to `umh/#`
-- `branch` processor with `cached` - caches asset IDs
-- `sql_raw` processor - looks up/creates asset IDs
-- `switch` output - routes numeric→`tag`, string→`tag_string`
-- `sql_insert` output - batched inserts
+The flows use Benthos/Redpanda Connect components with consistent asset mapping.
+
+## Integration Patterns
+
+See `docs/integration-patterns.md` for details on:
+- **Pattern A**: Direct write (UNS → TimescaleDB)
+- **Pattern B**: Pull on demand (UNS triggers fetch from ERP)
+- **Pattern C**: Preload + change detection (used in this repo)
+
+Pattern C enables process mining by tracking full history of state changes.
+
+## Complete MCP Stack for AI Development
+
+**Batteries included** - configure complete MCP stack for enhanced AI assistance:
+
+```bash
+# Documentation Context
+claude mcp add --transport http --scope user gitbook https://docs.umh.app/~gitbook/mcp
+claude mcp add --transport http --scope user postgres-docs https://mcp.tigerdata.com/docs
+claude mcp add --transport http --scope user redpanda https://docs.redpanda.com/mcp
+
+# Live Database Access
+claude mcp add --transport http --scope user postgres-mcp https://github.com/crystaldba/postgres-mcp
+
+# Live Database Integration (when running with MCP addon)
+claude mcp add --transport http --scope user umh-postgres http://localhost:3003
+
+# Verify setup
+claude mcp list
+```
+
+With this complete setup, AI agents have access to:
+- Complete UMH documentation and best practices
+- PostgreSQL/TimescaleDB documentation and optimization guides
+- Redpanda configuration patterns
+- Live database querying against your TimescaleDB via containerized MCP
+- Node-RED and Grafana API access via client-side MCP configuration
+- Integration examples and troubleshooting
+
+**MCP Addon**: `examples/mcp/docker-compose.mcp.yaml` provides containerized PostgreSQL MCP plus instructions for Node-RED/Grafana client-side integration. See `docs/ai-development-guide.md` for comprehensive workflows.
+
+## Deployment Notes
+
+**UMH Core runs separately** from the Docker Compose stack:
+- Separate container for reliability and independent restarts
+- Must connect to Docker Compose network
+- Example docker run command in README.md
+- Uses volume `umh-core-data` for persistence
+
+**Why separate?**
+- UMH Core can restart without affecting infrastructure
+- Infrastructure can restart without affecting UMH Core
+- Easier to update UMH Core independently
+- Matches production deployment patterns
 
 ## Editing Notes
 
@@ -121,3 +221,37 @@ The bridge uses Benthos/Redpanda Connect components:
 - Keep `.env.example` updated when adding env vars
 - Test compose changes with `docker compose config`
 - dataFlows are configured via Management Console, not direct config editing
+- All flows are in `examples/databridges/flows/` - single source of truth
+- Always use relative paths in compose files (example: `../../configs/`)
+
+## Troubleshooting
+
+**Network issues:**
+```bash
+# List Docker networks
+docker network ls | grep umh
+
+# Inspect network
+docker network inspect <network-name>
+
+# Connect UMH Core to existing network
+docker network connect <network-name> umh-core
+```
+
+**Database issues:**
+```bash
+# Check TimescaleDB is healthy
+docker exec timescaledb pg_isready -U postgres -d umh_v2
+
+# Verify tables exist
+docker exec timescaledb psql -U postgres -d umh_v2 -c "\dt"
+
+# Check user permissions
+docker exec timescaledb psql -U postgres -d umh_v2 -c "\du"
+```
+
+**Data flow issues:**
+- Check Management Console for flow status
+- Verify AUTH_TOKEN is set correctly
+- Check UMH Core logs: `docker logs umh-core`
+- Verify network connectivity between services

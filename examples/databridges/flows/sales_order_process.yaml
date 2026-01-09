@@ -1,0 +1,92 @@
+# ==============================================================================
+# Sales Order Process Flow (Deduplication)
+# ==============================================================================
+# Compares incoming .process messages against database to classify as
+# create, update, or duplicate — then republishes with the action type.
+#
+# Type: Stand-alone Flow (dataFlow)
+#
+# Dependencies:
+#   - asset table with get_asset_id() function
+#   - erp_sales_order table
+#
+# Topic flow:
+#   umh.v1.{location}._sales_order.process
+#     → (SQL lookup + comparison)
+#     → umh.v1.{location}._sales_order.create|update|duplicate
+# ==============================================================================
+
+dataFlow:
+  - name: sales-order-process
+    desiredState: active
+    dataFlowComponentConfig:
+      benthos:
+        input:
+          uns:
+            umh_topic: "umh\\.v1\\..*\\._sales_order\\.process"
+            consumer_group: sales_order_process
+
+        pipeline:
+          processors:
+            - bloblang: |
+                let umh_topic = meta("umh_topic")
+                let action = $umh_topic.split(".").index(-1)
+                root = if $action == "process" { this } else { deleted() }
+
+            # Resolve asset_id from topic path
+            - branch:
+                processors:
+                  - bloblang: |
+                      let umh_topic = meta("umh_topic")
+                      let parts = $umh_topic.split("_sales_order").index(0).split(".").slice(2, -1)
+                      root.enterprise = parts.index(0).catch("")
+                      root.site = parts.index(1).catch("")
+                      root.area = parts.index(2).catch("")
+                      root.line = parts.index(3).catch("")
+                      root.workcell = parts.index(4).catch("")
+                      root.origin_id = parts.index(5).catch("")
+
+                  - sql_select:
+                      driver: postgres
+                      dsn: postgres://kafkatopostgresqlv2:umhcore@pgbouncer:5432/umh_v2?sslmode=disable
+                      table: asset
+                      where: id = get_asset_id(?, ?, ?, ?, ?, ?)
+                      args_mapping: "[ this.enterprise, this.site, this.area, this.line, this.workcell, this.origin_id ]"
+                      columns: [id]
+
+                  - bloblang: root.asset_id = this.index(0).id
+
+                  - catch:
+                      - log:
+                          level: ERROR
+                          message: "Asset lookup failed: ${!meta(\"umh_topic\")}"
+                result_map: root.asset_id = this.asset_id
+
+            # Query existing record
+            - branch:
+                processors:
+                  - sql_select:
+                      driver: postgres
+                      dsn: postgres://kafkatopostgresqlv2:umhcore@pgbouncer:5432/umh_v2?sslmode=disable
+                      table: erp_sales_order
+                      columns: ["*"]
+                      where: order_id = $1 AND asset_id = $2
+                      args_mapping: "[ this.order_id, this.asset_id ]"
+                result_map: |
+                  root.existing = if this.length() == 0 { null } else { this.index(0) }
+
+            # Determine change type
+            - bloblang: |
+                let existing = this.existing
+                let change_type = if $existing == null {
+                  "create"
+                } else if root.order_id == $existing.order_id && root.customer_name == $existing.customer_name && root.milestone == $existing.milestone && root.due_date == $existing.due_date && root.order_date == $existing.order_date && root.delivered_date == $existing.delivered_date && root.status == $existing.status {
+                  "duplicate"
+                } else {
+                  "update"
+                }
+                root.existing = deleted()
+                meta umh_topic = meta("umh_topic").trim_suffix("process") + $change_type
+
+        output:
+          uns: {}

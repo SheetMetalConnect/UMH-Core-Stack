@@ -1,0 +1,106 @@
+# ==============================================================================
+# Historian Flow — UNS to TimescaleDB
+# ==============================================================================
+# Persists time-series data from UNS to TimescaleDB.
+#
+# Type: Stand-alone Flow (dataFlow)
+#
+# Asset model (consistent with ERP flows):
+#   - asset_name = last segment of location_path
+#   - location   = path ABOVE asset_name (not including it)
+#
+# Example:
+#   location_path: acme.chicago.packaging.line1
+#   → asset_name = 'line1'
+#   → location   = 'acme.chicago.packaging'
+# ==============================================================================
+
+dataFlow:
+  - name: uns-historian
+    desiredState: active
+    dataFlowComponentConfig:
+      benthos:
+        input:
+          kafka:
+            addresses:
+              - localhost:9092
+            consumer_group: historian-consumer
+            topics:
+              - umh.messages
+
+        pipeline:
+          processors:
+            - bloblang: |
+                # Parse location_path into asset_name and location
+                let loc_parts = meta("location_path").or("").split(".")
+                let loc_len = $loc_parts.length()
+                
+                # asset_name = last segment
+                # location = everything BEFORE asset_name (not including it)
+                root.asset_name = if $loc_len > 0 { $loc_parts.index(-1) } else { "" }
+                root.location = if $loc_len > 1 { $loc_parts.slice(0, -1).join(".") } else { "" }
+                
+                root.tag_name = meta("tag_name").or("")
+                root.value = this.value
+                root.timestamp = if this.exists("timestamp_ms") {
+                  (this.timestamp_ms / 1000).ts_format()
+                } else {
+                  now().ts_format()
+                }
+                
+                root = if root.asset_name == "" || root.tag_name == "" { deleted() } else { root }
+
+            - label: get_asset_id
+              branch:
+                processors:
+                  - cached:
+                      cache: id_cache
+                      key: ${! this.location + "|" + this.asset_name }
+                      processors:
+                        - sql_raw:
+                            driver: postgres
+                            dsn: postgres://kafkatopostgresqlv2:umhcore@pgbouncer:5432/umh_v2?sslmode=disable
+                            query: |
+                              INSERT INTO asset (asset_name, location)
+                              VALUES ($1, $2)
+                              ON CONFLICT (asset_name) DO UPDATE SET location = EXCLUDED.location
+                              RETURNING id;
+                            args_mapping: '[ this.asset_name, this.location ]'
+                        - bloblang: |
+                            root = if this.length() > 0 { this.index(0).get("id") } else { null }
+                result_map: root.asset_id = this
+
+            - switch:
+                - check: this.asset_id == null
+                  processors:
+                    - bloblang: root = deleted()
+
+        output:
+          switch:
+            cases:
+              - check: this.value.type() == "number"
+                output:
+                  sql_insert:
+                    driver: postgres
+                    dsn: postgres://kafkatopostgresqlv2:umhcore@pgbouncer:5432/umh_v2?sslmode=disable
+                    table: tag
+                    columns: [time, asset_id, tag_name, value, origin]
+                    args_mapping: '[ this.timestamp, this.asset_id, this.tag_name, this.value, "uns" ]'
+                    batching:
+                      count: 1000
+                      period: 5s
+              - output:
+                  sql_insert:
+                    driver: postgres
+                    dsn: postgres://kafkatopostgresqlv2:umhcore@pgbouncer:5432/umh_v2?sslmode=disable
+                    table: tag_string
+                    columns: [time, asset_id, tag_name, value, origin]
+                    args_mapping: '[ this.timestamp, this.asset_id, this.tag_name, this.value.string(), "uns" ]'
+                    batching:
+                      count: 1000
+                      period: 5s
+
+        cache_resources:
+          - label: id_cache
+            memory:
+              default_ttl: 24h

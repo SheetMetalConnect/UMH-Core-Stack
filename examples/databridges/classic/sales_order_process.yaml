@@ -1,0 +1,72 @@
+# Sales Order Process (Classic / Kubernetes)
+# For UMH Core, see: ../flows/sales_order_process.yaml
+
+input:
+  kafka_franz:
+    seed_brokers:
+      - united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092
+    topics:
+      - umh.v1.*._sales_order.process
+    regexp_topics: true
+    consumer_group: sales_order_process
+    client_id: sales_order_process
+
+pipeline:
+  processors:
+    - bloblang: |
+        root = if meta("kafka_key") == "process" { this } else { deleted() }
+    - branch:
+        processors:
+          - bloblang: |
+              let asset_id_string = meta("kafka_topic").split("_sales_order").index(0).split(".").slice(3,-1)
+              root.enterprise = meta("kafka_topic").split(".").index(2).catch("")
+              root.site = $asset_id_string.index(0).catch("")
+              root.area = $asset_id_string.index(1).catch("")
+              root.line = $asset_id_string.index(2).catch("")
+              root.workcell = $asset_id_string.index(3).catch("")
+              root.origin_id = $asset_id_string.index(4).catch("")
+          - sql_select:
+              driver: postgres
+              dsn: postgres://kafkatopostgresqlv2:changemetoo@united-manufacturing-hub.united-manufacturing-hub.svc.cluster.local:5432/umh_v2
+              table: asset
+              where: id = get_asset_id(?, ?, ?, ?, ?, ?)
+              args_mapping: "[ this.enterprise, this.site, this.area, this.line, this.workcell, this.origin_id ]"
+              columns: [id]
+          - bloblang: root.asset_id = this.index(0).id
+          - catch:
+              - log:
+                  level: ERROR
+                  message: "Asset not found for topic ${!meta(\"kafka_topic\")}"
+        result_map: root.asset_id = this.asset_id
+    - branch:
+        processors:
+          - sql_select:
+              driver: postgres
+              dsn: postgres://kafkatopostgresqlv2:changemetoo@united-manufacturing-hub.united-manufacturing-hub.svc.cluster.local:5432/umh_v2
+              table: erp_sales_order
+              columns: ["*"]
+              where: order_id = $1 AND asset_id = $2
+              args_mapping: "[ this.order_id, this.asset_id ]"
+        result_map: |
+          root.query = if this.length() == 0 { "no_match" } else { this.index(0) }
+    - bloblang: |
+        let query = this.query
+        root = this
+        root.query = deleted()
+        let change_type = if root.order_id == $query.order_id && root.customer_name == $query.customer_name && root.milestone == $query.milestone && root.due_date == $query.due_date && root.order_date == $query.order_date && root.delivered_date == $query.delivered_date && root.status == $query.status {
+          "duplicate"
+        } else if $query == "no_match" {
+          "create"
+        } else {
+          "update"
+        }
+        meta kafka_topic = meta("kafka_topic").trim_suffix("process") + $change_type
+        meta kafka_key = $change_type
+
+output:
+  kafka_franz:
+    topic: ${! meta("kafka_topic") }
+    seed_brokers:
+      - united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092
+    client_id: sales_order_process
+    key: ${! meta("kafka_key") }

@@ -1,99 +1,214 @@
 # UMH Core Stack
 
-A ready-to-run Docker Compose stack for [United Manufacturing Hub (UMH)](https://github.com/united-manufacturing-hub/united-manufacturing-hub) with batteries included.
+Turn-key Docker Compose deployment for [United Manufacturing Hub](https://github.com/united-manufacturing-hub/united-manufacturing-hub) — the Swiss Army knife for manufacturing data infrastructure.
 
-## What's Included
+**Batteries included:** MQTT, TimescaleDB, Grafana, Node-RED, data flows, and ERP integration patterns.
 
-| Component | Purpose |
-|-----------|---------|
-| **UMH Core** | Edge gateway with embedded Kafka (Redpanda) and Unified Namespace |
-| **HiveMQ CE** | MQTT broker for device connectivity |
-| **Node-RED** | Flow-based programming with Projects + Multiplayer enabled |
-| **TimescaleDB** | Time-series database for historian storage |
-| **Grafana** | Dashboards with TimescaleDB datasource pre-configured |
-| **PgBouncer** | Database connection pooling |
-| **Portainer** | Container management UI |
-| **NGINX** | Reverse proxy for webhooks |
+## What This Provides
 
-This stack extends the [official UMH Docker Compose setup](https://github.com/united-manufacturing-hub/united-manufacturing-hub/pull/2352) with additional tooling for rapid prototyping.
+**Infrastructure** (docker-compose):
+- HiveMQ CE — MQTT broker
+- TimescaleDB — Time-series database with pre-configured schema
+- Grafana — Dashboards with datasource auto-provisioned
+- PgBouncer — Connection pooling
+- Node-RED — Flow programming (Projects + Multiplayer enabled)
+- Portainer — Container management
+- NGINX — Reverse proxy for webhooks
 
-## Pre-configured Features
+**Data flows** ([examples/databridges](examples/databridges)):
+- Historian — UNS → TimescaleDB persistence
+- ERP integration — Sales orders with deduplication + history tracking
+- MQTT bridges — External system integration and feedback
 
-**Node-RED** (`configs/nodered/settings.js`):
-- **Projects**: Git-backed flow versioning enabled
-- **Multiplayer**: Real-time collaboration mode enabled
-- **External Modules**: Install npm packages directly in function nodes
+**Optional addons:**
+- [Historian](examples/historian) — TimescaleDB + Grafana + PgBouncer
+- [MCP](examples/mcp) — AI/LLM integration for Node-RED and Grafana
 
-**Grafana** (`configs/grafana/provisioning/`):
-- **TimescaleDB Datasource**: Auto-provisioned on startup, ready to query
-
-**TimescaleDB** (`configs/timescaledb-init/`):
-- **Schema**: `asset`, `tag`, `tag_string` tables with hypertables
-- **Users**: Writer (`kafkatopostgresqlv2`) and reader (`grafanareader`) pre-created
-- **Compression**: Automatic after 7 days
-
-> **Default Password:** All services use `umhcore` as the default password for easy development setup. For production, search and replace all occurrences: `grep -r "umhcore" . --include="*.yaml" --include="*.example" --include="*.md"`
-
-> **Latest Images:** All services use `:latest` tags for easy updates. Run `docker compose pull` regularly to get the newest versions.
+**Architecture:** UMH Core runs separately from the stack for reliability and independent updates.
 
 ## Quick Start
 
-```bash
-# Copy and configure environment
-cp .env.example .env
-# Edit .env and add your AUTH_TOKEN from Management Console
+**Fast client deployment** → [**Quick Start Guide**](docs/quick-start.md)
 
-# Start the full stack
-docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml up -d
+```bash
+# One command: Full stack with AI integration
+docker compose -f docker-compose.yaml \
+  -f examples/historian/docker-compose.historian.yaml \
+  -f examples/mcp/docker-compose.mcp.yaml up -d
+
+# Connect UMH Core + verify deployment
+# See quick-start.md for complete 5-minute workflow
 ```
 
 ## Access Services
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| Node-RED | http://localhost:1880 | - |
 | Grafana | http://localhost:3000 | admin / umhcore |
+| Node-RED | http://localhost:1880 | — |
 | Portainer | http://localhost:9000 | Create on first visit |
-| MQTT Broker | localhost:1883 | - |
+| MQTT | localhost:1883 | — |
+| MQTT WebSocket | localhost:8083 | — |
+| PostgreSQL (via PgBouncer) | localhost:5432 | postgres / umhcore |
+| NGINX (webhooks) | http://localhost:8081 | — |
 
-## Historian Bridge
+⚠️ **Security:** Change default password `umhcore` before production use.
 
-This stack includes a **ready-to-paste historian bridge** that writes MQTT data to TimescaleDB. It's adapted from the [UMH Classic kafka_to_postgresql_historian_bridge](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/main/deployment/united-manufacturing-hub/templates/bridges/kafka_to_postgres/historian/configmap.yaml).
+## Architecture
 
-To enable it:
+```
+External Systems
+      │
+      ▼ MQTT (1883) / HTTP (8081)
+┌─────────────┐     ┌──────────────┐
+│  HiveMQ CE  │────▶│   UMH Core   │
+│   + NGINX   │     │  (separate)  │
+└─────────────┘     └──────┬───────┘
+                           │ UNS (Kafka)
+                           ▼
+                    ┌──────────────┐
+                    │  Data Flows  │
+                    └──────┬───────┘
+                           │
+              ┌────────────┼────────────┐
+              ▼            ▼            ▼
+        ┌──────────┐ ┌──────────┐ ┌──────────┐
+        │Historian │ │   ERP    │ │ Feedback │
+        │  Flow    │ │  Flows   │ │  Flow    │
+        └────┬─────┘ └────┬─────┘ └────┬─────┘
+             │            │            │
+             ▼            ▼            ▼
+        ┌─────────────────────┐   ┌──────────┐
+        │    TimescaleDB      │   │   MQTT   │
+        │  tag / erp_* tables │   │ feedback │
+        └──────────┬──────────┘   └──────────┘
+                   │
+                   ▼
+              ┌─────────┐
+              │ Grafana │
+              └─────────┘
+```
 
-1. Open **Management Console** → **Data Flows** → **Standalone** → **Add**
-2. Paste the config from [docs/historian-flow.md](docs/historian-flow.md)
+## Addons
 
-Works out of the box (default password: `umhcore`). See [Historian](docs/historian.md) for schema details.
+### Historian (TimescaleDB + Grafana)
 
-## Documentation
+Time-series storage and visualization. **Recommended for production.**
 
-- [Overview](docs/overview.md) - Architecture and concepts
-- [Operations](docs/operations.md) - Quick start and commands
-- [Networking](docs/networking.md) - Ports, internal DNS, LAN access
-- [Historian](docs/historian.md) - TimescaleDB setup and database schema
-- [Historian Flow](docs/historian-flow.md) - MQTT → TimescaleDB bridge config
-- [Extensions](docs/extensions.md) - Optional addons (NocoDB, Appsmith, n8n, etc.)
-- [Security](docs/security.md) - Production hardening notes
+```bash
+docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml up -d
+```
 
-## Repo Structure
+[Full documentation →](examples/historian)
+
+### MCP (AI/LLM Integration)
+
+AI assistant access to Node-RED flows and Grafana dashboards.
+
+```bash
+docker compose -f docker-compose.yaml \
+  -f examples/historian/docker-compose.historian.yaml \
+  -f examples/mcp/docker-compose.mcp.yaml up -d
+```
+
+[Full documentation →](examples/mcp)
+
+## Data Patterns
+
+### Historian
+
+Time-series data flows directly from UNS to TimescaleDB hypertables (`tag`, `tag_string`).
+
+### ERP Integration (Pattern C)
+
+Local cache with change detection and full history tracking:
+
+1. External system publishes to `_sales_order.process`
+2. Process flow compares against database (deduplication)
+3. Republishes as `.create`, `.update`, or `.duplicate`
+4. Persistence flow upserts current state + appends to history
+5. Feedback flow notifies external systems via MQTT
+
+**Why Pattern C?** Enables event-driven architecture with complete audit trail for process mining.
+
+See [docs/integration-patterns.md](docs/integration-patterns.md) for all patterns.
+
+## Repository Structure
 
 ```
 .
-├── docker-compose.yaml     # Core stack
-├── .env.example            # Environment template
-├── configs/                # Service configurations
-├── docs/                   # Documentation
-└── examples/historian/     # TimescaleDB + Grafana addon
+├── README.md                    # You are here
+├── PROJECT.md                   # Architecture and design decisions
+├── CLAUDE.md                    # Agent/AI assistant instructions
+├── docker-compose.yaml          # Core infrastructure
+├── .env.example                 # Environment template
+├── configs/                     # Service configurations
+│   ├── nginx.conf
+│   ├── nodered/settings.js
+│   ├── grafana/provisioning/
+│   └── timescaledb-init/
+├── examples/
+│   ├── databridges/             # Data flows + SQL schemas
+│   │   ├── flows/               # Deploy these via Management Console
+│   │   ├── sql/                 # Database initialization
+│   │   └── classic/             # Reference: k8s format
+│   ├── historian/               # TimescaleDB addon
+│   └── mcp/                     # AI/LLM integration addon
+└── docs/                        # Extended documentation
+    ├── integration-patterns.md  # Pattern A/B/C explained
+    ├── historian.md             # TimescaleDB setup details
+    ├── networking.md            # Ports and connectivity
+    ├── operations.md            # Common tasks
+    ├── security.md              # Production hardening
+    ├── troubleshooting.md       # Common issues
+    └── ...
 ```
 
-## Related
+## Documentation
 
-- [UMH Core Repository](https://github.com/united-manufacturing-hub/united-manufacturing-hub)
-- [UMH Documentation](https://umh.docs.umh.app/)
+**Setup & Operations:**
+- [Quick Start](docs/quick-start.md) — 5-minute deployment with AI integration
+- [Networking](docs/networking.md) — Ports, DNS, and connectivity
+- [Operations](docs/operations.md) — Common tasks and workflows
+- [Updating](docs/updating.md) — Update procedures
+
+**Integration & Development:**
+- [Integration Patterns](docs/integration-patterns.md) — Pattern A/B/C detailed
+- [Historian](docs/historian.md) — TimescaleDB deep dive
+- [Integrations](docs/integrations.md) — External system integration
+- [Migration](docs/migration.md) — Migrating from UMH Classic
+
+**Production & Security:**
+- [Security](docs/security.md) — Production hardening checklist
+- [Troubleshooting](docs/troubleshooting.md) — Common issues and fixes
+- [Extensions](docs/extensions.md) — Optional MES tools (NocoDB, Appsmith, n8n)
+
+## Production Checklist
+
+- [ ] Change default password `umhcore` everywhere:
+  ```bash
+  grep -r "umhcore" . --include="*.yaml" --include="*.example" --include="*.md"
+  ```
+- [ ] Set `AUTH_TOKEN` from Management Console
+- [ ] Configure TLS/SSL for external endpoints
+- [ ] Restrict NGINX CORS headers (currently allows `*`)
+- [ ] Set up database backups
+- [ ] Configure resource limits in compose files
+- [ ] Review [docs/security.md](docs/security.md) for complete hardening
+
+## Contributing
+
+This is a community-driven deployment package for United Manufacturing Hub. Contributions welcome!
+
+**Before submitting:**
+- Test with fresh `.env` from `.env.example`
+- Verify all services start: `docker compose ps`
+- Run validation: `docker compose config`
+- Update relevant documentation
+
+## Related Resources
+
+- [UMH Documentation](https://docs.umh.app/)
 - [Management Console](https://management.umh.app/)
-
-## License
-
-This deployment configuration is provided as-is. UMH Core and its components have their own licenses - see the [UMH repository](https://github.com/united-manufacturing-hub/united-manufacturing-hub) for details.
+- [UMH Core Repository](https://github.com/united-manufacturing-hub/united-manufacturing-hub)
+- [PROJECT.md](PROJECT.md) — Deep dive on architecture

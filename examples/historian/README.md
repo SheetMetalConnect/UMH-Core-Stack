@@ -42,7 +42,7 @@ POSTGRES_PASSWORD=umhcore  # Change in production
 HISTORIAN_WRITER_PASSWORD=umhcore
 HISTORIAN_READER_PASSWORD=umhcore
 
-Set credentials before first boot; init scripts apply them only once.
+# Set credentials before first boot; init scripts apply them only once.
 ```
 
 ### 3. Deploy historian addon
@@ -73,6 +73,7 @@ umh-core      ghcr.io/united-manufacturing-hub/umh-core    Up (healthy)
 Visit: http://localhost:3000
 - Username: `admin`
 - Password: `umhcore` (change on first login)
+
 Grafana auto-provisions the TimescaleDB datasource via `configs/grafana/provisioning`.
 
 ### 6. Verify Installation
@@ -209,144 +210,17 @@ This bridge will publish data to the UNS, but the data will NOT be automatically
 
 #### Step 2: Create a Data Flow for Persistence
 
-Create a separate data flow that subscribes to `_historian` topics and writes to TimescaleDB. We recommend creating this in the Management Console.
+Create a separate data flow that subscribes to `_historian` topics and writes to TimescaleDB. We provide a pre-built historian flow that you can use.
+
+**To deploy the historian data flow:**
+
+1. Open **Management Console** → **Data Flows** → **Standalone** → **Add**
+2. Paste the config from `../databridges/flows/historian.yaml`
+3. Deploy the flow
+
+For complete details on how the historian flow works, see `../databridges/flows/historian.yaml`.
 
 **Important**: Both the bridge AND the data flow must be created. The bridge alone will not persist data to TimescaleDB.
-
-### Working Example: Complete Data Flow Configuration
-
-Here is a complete example of a data flow that subscribes to `_historian` topics and persists data to TimescaleDB:
-
-```yaml
-# Data Flow: Historian to TimescaleDB
-# This flow subscribes to all _historian topics and writes to TimescaleDB
-
-input:
-  label: "historian_subscriber"
-  kafka:
-    addresses:
-      - "localhost:9092"
-    topics:
-      - "umh.v1.*.*.*.*.*.*.*.*._.historian.*"
-    consumer_group: "historian-timescaledb-writer"
-    regexp_topics: true
-
-pipeline:
-  processors:
-    # Parse the topic to extract location, asset, and tag name
-    - mapping: |
-        # Extract topic components
-        let topic_parts = this.meta("kafka_topic").split(".")
-
-        # Extract location path (everything between umh.v1 and _historian)
-        let location_start = 2
-        let historian_index = topic_parts.index_of("_historian")
-        let location_parts = topic_parts.slice(location_start, historian_index)
-        let location = location_parts.join(".")
-
-        # Extract asset (last element before _historian)
-        let asset = topic_parts.index(historian_index - 1)
-
-        # Extract tag name (everything after _historian)
-        let tag_parts = topic_parts.slice(historian_index + 1)
-        let tag = tag_parts.join(".")
-
-        # Store in metadata for SQL query
-        meta location = location
-        meta asset = asset
-        meta tag = tag
-
-        # Keep original payload
-        root = this
-
-    # Branch based on value type (numeric vs string)
-    - branch:
-        request_map: 'root = this'
-        processors:
-          - switch:
-              - check: 'this.type() == "number" || this.type() == "int" || this.type() == "float"'
-                processors:
-                  - mutation: |
-                      meta table = "tag"
-                      meta is_numeric = true
-
-              - check: 'this.type() == "string"'
-                processors:
-                  - mutation: |
-                      meta table = "tag_string"
-                      meta is_numeric = false
-
-              - processors:
-                  - mutation: |
-                      # Default to string table for unknown types
-                      meta table = "tag_string"
-                      meta is_numeric = false
-        result_map: 'root = this'
-
-output:
-  # Write to TimescaleDB
-  sql_raw:
-    driver: "postgres"
-    dsn: "postgres://postgres:${POSTGRES_PASSWORD}@pgbouncer:5432/umh_v2?sslmode=disable"
-
-    # Insert or update asset record
-    init_statement: |
-      INSERT INTO asset (asset_name)
-      VALUES ('${! meta("asset") }')
-      ON CONFLICT (asset_name) DO NOTHING;
-
-    # Insert time-series data (switches between tag and tag_string based on type)
-    query: |
-      INSERT INTO ${! meta("table") } (time, asset_id, tag_name, value)
-      VALUES (
-        NOW(),
-        (SELECT id FROM asset WHERE asset_name = '${! meta("asset") }'),
-        '${! meta("tag") }',
-        ${! if meta("is_numeric") { this } else { "'%s'" % this } }
-      );
-
-    # Batching for performance
-    batching:
-      count: 100
-      period: "1s"
-
-    # Error handling
-    max_in_flight: 64
-    retry_config:
-      max_retries: 3
-      backoff:
-        initial_interval: "1s"
-        max_interval: "10s"
-```
-
-**How this data flow works:**
-
-1. **Input**: Subscribes to all topics matching the pattern `umh.v1.*.*.*.*._historian.*` using regex topics
-2. **Pipeline**:
-   - Parses the topic path to extract location, asset name, and tag name
-   - Determines if the value is numeric or string
-   - Sets appropriate metadata for the SQL query
-3. **Output**:
-   - Creates asset record if it doesn't exist
-   - Inserts time-series data into either `tag` (numeric) or `tag_string` (text) table
-   - Uses batching for performance (100 records or 1 second)
-   - Includes retry logic for transient errors
-
-**To deploy this data flow:**
-
-1. Save the configuration above to a file (e.g., `historian-timescaledb.yaml`)
-2. In Management Console, create a new Stand-alone Flow (Data Flow)
-3. Paste the configuration and deploy
-4. Verify data is being written by checking TimescaleDB:
-   ```bash
-   docker compose exec timescaledb psql -U postgres -d umh_v2 -c "SELECT COUNT(*) FROM tag;"
-   ```
-
-**Important Notes:**
-- The `${POSTGRES_PASSWORD}` variable must match your `.env` configuration
-- The regex pattern `umh.v1.*.*.*.*._historian.*` matches any number of location segments
-- Adjust batching settings based on your data rate
-- Monitor the data flow logs for any errors
 
 ### Querying Data in Grafana
 

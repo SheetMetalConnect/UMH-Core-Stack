@@ -1,0 +1,40 @@
+# Generic MQTT to Redpanda (Classic / Kubernetes)
+# For UMH Core, see: ../flows/mqtt_to_uns_bridge.yaml
+
+input:
+  mqtt:
+    urls:
+      - united-manufacturing-hub-mqtt.united-manufacturing-hub.svc.cluster.local:1883
+    client_id: generic_mqtt_to_redpanda
+    dynamic_client_id_suffix: nanoid
+    auto_replay_nacks: false
+    topics:
+      - umh/v1/+/_sales_order/process
+      - umh/v1/+/+/_sales_order/process
+      - umh/v1/+/+/+/_sales_order/process
+      - umh/v1/+/+/+/+/_sales_order/process
+      - umh/v1/+/+/+/+/+/_sales_order/process
+      - umh/v1/+/_sales_order/delete
+      - umh/v1/+/+/_sales_order/delete
+      - umh/v1/+/+/+/_sales_order/delete
+      - umh/v1/+/+/+/+/_sales_order/delete
+      - umh/v1/+/+/+/+/+/_sales_order/delete
+
+pipeline:
+  processors:
+    - bloblang: |
+        let mqtt_topic = meta("mqtt_topic").or("")
+        root = if $mqtt_topic == "" { deleted() } else { this }
+        meta kafka_topic = $mqtt_topic.replace("/", ".")
+        meta kafka_key = $mqtt_topic.split("/").index(-1)
+
+output:
+  broker:
+    pattern: fan_out
+    outputs:
+      - kafka_franz:
+          topic: ${! meta("kafka_topic") }
+          seed_brokers:
+            - united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092
+          client_id: generic_mqtt_to_redpanda
+          key: ${! meta("kafka_key").or("") }

@@ -1,0 +1,52 @@
+# UMH Core MCP (Model Context Protocol) Addon
+# FAST CLIENT DEPLOYMENT: Just the essentials that work reliably
+#
+# Usage: 
+# docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml -f examples/mcp/docker-compose.mcp.yaml up -d
+#
+# What this gives you:
+# - PostgreSQL MCP for live database queries (port 3003)
+# - Direct API access to Node-RED (port 1880) and Grafana (port 3000)
+# - Documentation context via user-scoped MCP (see CLAUDE.md)
+
+services:
+  # ============================================================================
+  # PostgreSQL MCP - Direct Database Access for AI
+  # ============================================================================
+  postgres-mcp:
+    image: docker.io/crystaldba/postgres-mcp:latest
+    container_name: postgres-mcp
+    restart: unless-stopped
+    
+    environment:
+      # Connect to TimescaleDB via PgBouncer (read-only user)
+      - DATABASE_URL=postgresql://grafanareader:umhcore@pgbouncer:5432/umh_v2
+      - PORT=3003
+      - ACCESS_MODE=restricted
+      
+    ports:
+      - "3003:3003"
+    
+    networks:
+      - umh-network
+    
+    depends_on:
+      - pgbouncer
+    
+    # Simple health check
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3003"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# ==============================================================================
+# Fast Deployment Notes
+# ==============================================================================
+# This minimal addon provides:
+# 1. Containerized PostgreSQL MCP (works out-of-box)
+# 2. Direct API access to existing Node-RED/Grafana services
+# 3. Documentation context (configure once, works everywhere)
+#
+# No complex client-side setup needed for database access!

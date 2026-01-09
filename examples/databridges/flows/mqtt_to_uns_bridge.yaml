@@ -1,0 +1,44 @@
+# ==============================================================================
+# MQTT to UNS Bridge
+# ==============================================================================
+# Ingests .process and .delete messages from external MQTT into UNS.
+#
+# Type: Bridge (protocolConverter)
+#
+# Topic conversion: umh/v1/{location}/_sales_order/process → umh.v1.{location}._sales_order.process
+# ==============================================================================
+
+protocolConverter:
+  - name: mqtt-to-uns-orders
+    desiredState: active
+    protocolConverterServiceConfig:
+      config:
+        dataflowcomponent_read:
+          benthos:
+            input:
+              mqtt:
+                urls:
+                  - tcp://hivemq:1883
+                client_id: mqtt_to_uns_orders
+                dynamic_client_id_suffix: nanoid
+                topics:
+                  - umh/v1/+/_sales_order/process
+                  - umh/v1/+/+/_sales_order/process
+                  - umh/v1/+/+/+/_sales_order/process
+                  - umh/v1/+/+/+/+/_sales_order/process
+                  - umh/v1/+/+/+/+/+/_sales_order/process
+                  - umh/v1/+/_sales_order/delete
+                  - umh/v1/+/+/_sales_order/delete
+                  - umh/v1/+/+/+/_sales_order/delete
+                  - umh/v1/+/+/+/+/_sales_order/delete
+                  - umh/v1/+/+/+/+/+/_sales_order/delete
+
+            pipeline:
+              processors:
+                - bloblang: |
+                    let mqtt_topic = meta("mqtt_topic").or("")
+                    root = if $mqtt_topic == "" { deleted() } else { this }
+                    meta umh_topic = $mqtt_topic.replace("/", ".")
+
+            output:
+              uns: {}

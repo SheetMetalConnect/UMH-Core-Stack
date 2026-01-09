@@ -1,0 +1,50 @@
+# TimescaleDB Delete (Classic / Kubernetes)
+# For UMH Core, see: ../flows/timescale_delete.yaml
+
+input:
+  kafka_franz:
+    seed_brokers:
+      - united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092
+    topics:
+      - umh.v1.*._sales_order.delete
+    regexp_topics: true
+    consumer_group: generic_timescale_delete
+    client_id: generic_timescale_delete
+
+pipeline:
+  processors:
+    - bloblang: |
+        if meta("kafka_key") == "delete" {
+          root = this
+        } else {
+          root = deleted()
+        }
+    - branch:
+        processors:
+          - bloblang: |
+              let asset_id_string = meta("kafka_topic").split("_sales_order").index(0).split(".").slice(3,-1)
+              root.enterprise = meta("kafka_topic").split(".").index(2).catch("")
+              root.site = $asset_id_string.index(0).catch("")
+              root.area = $asset_id_string.index(1).catch("")
+              root.line = $asset_id_string.index(2).catch("")
+              root.workcell = $asset_id_string.index(3).catch("")
+              root.origin_id = $asset_id_string.index(4).catch("")
+          - sql_select:
+              driver: postgres
+              dsn: postgres://kafkatopostgresqlv2:changemetoo@united-manufacturing-hub.united-manufacturing-hub.svc.cluster.local:5432/umh_v2
+              table: asset
+              where: id = get_asset_id(?, ?, ?, ?, ?, ?)
+              args_mapping: "[ this.enterprise, this.site, this.area, this.line, this.workcell, this.origin_id ]"
+              columns: [id]
+          - catch:
+              - log:
+                  level: ERROR
+                  message: "Asset not found for topic ${!meta(\"kafka_topic\")}"
+        result_map: root.asset_id = this.index(0).id
+
+output:
+  sql_raw:
+    driver: postgres
+    dsn: postgres://kafkatopostgresqlv2:changemetoo@united-manufacturing-hub.united-manufacturing-hub.svc.cluster.local:5432/umh_v2
+    query: DELETE FROM erp_sales_order WHERE order_id = $1 AND asset_id = $2;
+    args_mapping: root = [this.order_id, this.asset_id]
