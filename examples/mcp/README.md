@@ -1,290 +1,141 @@
-# MCP (Model Context Protocol) Addon
+# MCP Addon
 
-This addon adds MCP servers for Node-RED and Grafana to enable AI/LLM integration with the UMH stack.
+AI/LLM integration via [Model Context Protocol](https://www.anthropic.com/mcp) for database access.
 
-## What is MCP?
+## What This Adds
 
-[Model Context Protocol (MCP)](https://www.anthropic.com/mcp) is an open standard that enables secure connections between LLM applications (like Claude, ChatGPT) and external services. MCP servers provide tools and context to AI assistants, allowing them to:
+- **postgres-mcp** (port 3003) - AI assistant access to TimescaleDB via PgBouncer
 
-- Read and interact with your Node-RED flows
-- Query and create Grafana dashboards  
-- Access real-time data from your UMH deployment
-- Provide intelligent automation suggestions
-
-## Services Included
-
-| Service | Purpose | Port | MCP Endpoint |
-|---------|---------|------|--------------|
-| **nodered-mcp** | Node-RED flows automation and AI-assisted development | 3001 | `http://<host>:3001` |
-| **grafana-mcp** | Dashboard creation and data visualization assistance | 3002 | `http://<host>:3002` |
+Provides AI assistants with read-only database access for querying time-series data, ERP tables, and generating insights.
 
 ## Prerequisites
 
-This addon requires the base UMH Core services to be running:
+**Requires historian addon** to be running (provides PgBouncer and TimescaleDB):
 
 ```bash
-# Start core services first
-docker compose -f ../../docker-compose.yaml up -d
-
-# For full historian stack
-docker compose -f ../../docker-compose.yaml -f ../historian/docker-compose.historian.yaml up -d
+docker compose -f ../../docker-compose.yaml \
+  -f ../historian/docker-compose.historian.yaml up -d
 ```
 
 ## Quick Start
 
-1. **Start MCP servers alongside existing services:**
-   ```bash
-   # Core + MCP only
-   docker compose -f ../../docker-compose.yaml -f docker-compose.mcp.yaml up -d
-   
-   # Core + Historian + MCP (recommended)
-   docker compose -f ../../docker-compose.yaml \
-     -f ../historian/docker-compose.historian.yaml \
-     -f docker-compose.mcp.yaml up -d
-   ```
-
-2. **Configure your AI client** (Claude Desktop, VSCode, etc.):
-   ```json
-   {
-     "mcpServers": {
-       "nodered": {
-         "command": "npx",
-         "args": ["@modelcontextprotocol/client-http", "http://<your-host-ip>:3001"]
-       },
-       "grafana": {
-         "command": "npx", 
-         "args": ["@modelcontextprotocol/client-http", "http://<your-host-ip>:3002"]
-       }
-     }
-   }
-   ```
-
-3. **Verify MCP servers are running:**
-   ```bash
-   # Check health endpoints
-   curl http://<host-ip>:3001/health  # Node-RED MCP
-   curl http://<host-ip>:3002/health  # Grafana MCP
-   
-   # View logs
-   docker logs nodered-mcp
-   docker logs grafana-mcp
-   ```
-
-## Configuration
-
-### Environment Variables
-
-Add these to your `.env` file (see `.env.example` for defaults):
-
 ```bash
-# MCP Server Ports
-MCP_NODERED_PORT=3001
-MCP_GRAFANA_PORT=3002
-
-# MCP Server Names (for client identification)
-MCP_NODERED_NAME=nodered
-MCP_GRAFANA_NAME=grafana
-
-# Node-RED Authentication (if enabled)
-NODERED_MCP_USERNAME=
-NODERED_MCP_PASSWORD=
-
-# Grafana credentials (inherited from historian addon)
-GF_ADMIN_USER=admin
-GF_ADMIN_PASSWORD=umhcore
+# Start MCP addon (requires historian to be running)
+docker compose -f ../../docker-compose.yaml \
+  -f ../historian/docker-compose.historian.yaml \
+  -f docker-compose.mcp.yaml up -d
 ```
 
-### Security Considerations
+## AI Client Setup
 
-1. **Change default credentials:**
-   ```bash
-   # In production, update Grafana password
-   GF_ADMIN_PASSWORD=your-secure-password
-   ```
-
-2. **Network access:**
-   - MCP ports (3001, 3002) are exposed to the host network
-   - In production, consider using a reverse proxy or VPN
-   - Firewall rules should restrict access to authorized clients
-
-3. **Authentication:**
-   - Node-RED MCP supports HTTP Basic auth if Node-RED has authentication enabled
-   - Grafana MCP uses Grafana's admin credentials
-
-## AI Client Integration
-
-### Claude Desktop
-
-Add to `~/.config/claude-desktop/claude_desktop_config.json`:
+Add to your AI client configuration (Claude Desktop, Claude Code, etc.):
 
 ```json
 {
   "mcpServers": {
-    "umh-nodered": {
+    "umh-database": {
       "command": "npx",
-      "args": ["@modelcontextprotocol/client-http", "http://192.168.1.100:3001"],
-      "env": {}
-    },
-    "umh-grafana": {
-      "command": "npx", 
-      "args": ["@modelcontextprotocol/client-http", "http://192.168.1.100:3002"],
-      "env": {}
+      "args": [
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://grafanareader:umhcore@<host-ip>:5432/umh_v2"
+      ]
     }
   }
 }
 ```
 
-### Claude Code CLI
+Replace `<host-ip>` with your Docker host IP address.
+
+## Environment Variables
+
+Add to your `.env` file (defaults shown):
 
 ```bash
-# Add MCP servers to your user config
-claude mcp add --transport http --scope user umh-nodered http://<host-ip>:3001
-claude mcp add --transport http --scope user umh-grafana http://<host-ip>:3002
+# PostgreSQL MCP Server
+MCP_POSTGRES_PORT=3003
+MCP_POSTGRES_ACCESS=restricted
 
-# Verify connections
-claude mcp list
-```
-
-### VSCode with Continue
-
-Add to `.continue/config.json`:
-
-```json
-{
-  "mcpServers": [
-    {
-      "name": "umh-nodered",
-      "url": "http://192.168.1.100:3001"
-    },
-    {
-      "name": "umh-grafana", 
-      "url": "http://192.168.1.100:3002"
-    }
-  ]
-}
+# Database credentials (from historian addon)
+HISTORIAN_READER_USER=grafanareader
+HISTORIAN_READER_PASSWORD=umhcore
+POSTGRES_DB=umh_v2
 ```
 
 ## Use Cases
 
-### Node-RED MCP Capabilities
+**Database Queries:**
+- "Show me the last 100 temperature readings from line-a"
+- "What's the average production rate for the last 7 days?"
+- "Find all sales orders created in the last 24 hours"
 
-- **Flow Development:** "Create a flow that reads sensor data from MQTT and writes to TimescaleDB"
-- **Debugging:** "Analyze this Node-RED flow and find potential issues"
-- **Documentation:** "Generate documentation for all flows in this workspace"
-- **Optimization:** "Suggest performance improvements for this data processing flow"
+**Data Analysis:**
+- "Analyze temperature trends over the past month"
+- "What patterns do you see in the production data?"
+- "Compare OEE metrics across different assets"
 
-### Grafana MCP Capabilities
+**Schema Exploration:**
+- "What tables are available in the database?"
+- "Describe the structure of the erp_sales_order table"
+- "Show me all hypertables and their compression settings"
 
-- **Dashboard Creation:** "Create a dashboard showing production metrics from TimescaleDB"
-- **Query Building:** "Help me write a query to show average temperature by hour"
-- **Panel Management:** "Add a time-series panel showing OEE trends"
-- **Datasource Integration:** "Query the pre-configured TimescaleDB datasource"
-- **Alerting:** "Set up alerts for when machine temperature exceeds 80°C"
-- **Data Analysis:** "What patterns do you see in this time-series data?"
+## Security
 
-**Note:** Grafana MCP automatically uses the pre-configured TimescaleDB datasource via PgBouncer, so all queries run against your UMH historian data.
+**Read-only access:** The MCP server uses the `grafanareader` role which has SELECT-only permissions.
 
-## Networking
+**Change default credentials in production:**
 
-MCP servers integrate with the existing UMH network architecture:
+```bash
+# Generate secure password
+openssl rand -base64 32
 
-```
-External MCP Client (Claude, VSCode, etc.)
-        ↓
-    <host-ip>:3001 (Node-RED MCP)
-    <host-ip>:3002 (Grafana MCP)
-        ↓
-    umh-network (Docker Bridge)
-        ↓
-    nodered:1880 (Node-RED API)
-    grafana:3000 (Grafana API)
+# Update in .env
+HISTORIAN_READER_PASSWORD=<generated-password>
 ```
 
-Both MCP servers:
-- Connect to the `umh-network` Docker network
-- Communicate with Node-RED and Grafana using internal Docker DNS
-- Expose HTTP endpoints for MCP client connections
-- Follow the same security and networking patterns as other UMH services
+**Network restrictions:**
+- MCP server accessible via internal Docker network
+- No direct external exposure
+- AI clients connect via exposed port 3003
+
+## Direct Node-RED & Grafana API Access
+
+For AI assistant integration with Node-RED flows and Grafana dashboards, use their REST APIs directly:
+
+**Node-RED API** (port 1880):
+- Flow management, deployment, debugging
+- Use client-side MCP tools or direct HTTP requests
+
+**Grafana API** (port 3000):
+- Dashboard creation, panel management, queries
+- Use client-side MCP tools or direct HTTP requests
+
+See [UMH Docs](https://docs.umh.app/) for API documentation.
 
 ## Troubleshooting
 
-### MCP Server Won't Start
-
-1. **Check dependencies:**
-   ```bash
-   # Ensure core services are running
-   docker ps | grep -E "(nodered|grafana)"
-   ```
-
-2. **Check port conflicts:**
-   ```bash
-   # Verify ports 3001, 3002 are available
-   lsof -i :3001
-   lsof -i :3002
-   ```
-
-3. **Check logs:**
-   ```bash
-   docker logs nodered-mcp --tail 20
-   docker logs grafana-mcp --tail 20
-   ```
-
-### MCP Client Can't Connect
-
-1. **Verify network connectivity:**
-   ```bash
-   # Test from your AI client machine
-   curl http://<umh-host-ip>:3001/health
-   curl http://<umh-host-ip>:3002/health
-   ```
-
-2. **Check firewall rules:**
-   ```bash
-   # Ensure ports 3001, 3002 are open
-   telnet <umh-host-ip> 3001
-   telnet <umh-host-ip> 3002
-   ```
-
-3. **Verify credentials:**
-   - Check Grafana credentials in `.env` file
-   - Test manual API access: `curl -u admin:umhcore http://<host>:3000/api/health`
-
-### Authentication Issues
-
-1. **Node-RED authentication:**
-   ```bash
-   # If Node-RED has auth enabled, set credentials
-   export NODERED_MCP_USERNAME=your-username
-   export NODERED_MCP_PASSWORD=your-password
-   ```
-
-2. **Grafana authentication:**
-   ```bash
-   # Option A: Create service account token (recommended)
-   docker exec grafana grafana-cli admin data-source create-service-account \
-     --name "MCP Integration" --role Admin
-   
-   # Option B: Verify admin credentials  
-   docker exec grafana grafana-cli admin reset-admin-password umhcore
-   ```
-
-## Stopping MCP Addon
-
+**Verify MCP server:**
 ```bash
-# Stop MCP services only
-docker compose -f docker-compose.mcp.yaml down
-
-# Stop everything including core services
-docker compose -f ../../docker-compose.yaml \
-  -f ../historian/docker-compose.historian.yaml \
-  -f docker-compose.mcp.yaml down
+curl http://localhost:3003/health
+docker logs postgres-mcp
 ```
+
+**Connection issues:**
+```bash
+# Ensure historian is running
+docker ps | grep -E "(pgbouncer|timescaledb)"
+
+# Test database connection
+docker exec postgres-mcp psql -h pgbouncer -U grafanareader -d umh_v2 -c "SELECT 1"
+```
+
+**Permission errors:**
+- MCP server uses read-only `grafanareader` role
+- Cannot INSERT, UPDATE, or DELETE
+- For write operations, use Node-RED flows or direct database access
 
 ## See Also
 
-- [UMH Core Documentation](../../README.md)
-- [Networking Guide](../../docs/networking.md) 
-- [Node-RED MCP Server](https://github.com/karavaev-evgeniy/node-red-mcp-server)
-- [Grafana MCP Server](https://github.com/grafana/mcp-grafana)
-- [Model Context Protocol Spec](https://www.anthropic.com/mcp)
-- [Claude Desktop Setup](https://claude.ai/desktop)
+- [Model Context Protocol](https://www.anthropic.com/mcp)
+- [PostgreSQL MCP Server](https://github.com/modelcontextprotocol/servers/tree/main/src/postgres)
+- [Historian Addon](../historian) - Required dependency
+- [Main README](../../README.md) - Full stack documentation

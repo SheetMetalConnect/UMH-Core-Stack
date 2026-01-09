@@ -94,8 +94,7 @@ These ports are published to the host and accessible from LAN:
 | Grafana | 3000 | 3000 | (fixed) | 3000 |
 | PgBouncer | 5432 | 5432 | (fixed) | 5432 |
 | **MCP Addon (optional)** | | | | |
-| Node-RED MCP Server | `MCP_NODERED_PORT` | `MCP_NODERED_PORT` | `MCP_NODERED_PORT` | 3001 |
-| Grafana MCP Server | `MCP_GRAFANA_PORT` | `MCP_GRAFANA_PORT` | `MCP_GRAFANA_PORT` | 3002 |
+| PostgreSQL MCP Server | `MCP_POSTGRES_PORT` | `MCP_POSTGRES_PORT` | `MCP_POSTGRES_PORT` | 3003 |
 | UMH Core (external container) | 8040, 8051 | not published | n/a | internal only |
 
 ### Internal Ports (Not Exposed)
@@ -169,8 +168,7 @@ All services are reachable from the LAN via the host's IP and published ports:
 | Webhook Endpoint | `http://<host-ip>:8081` | `http://192.168.1.100:8081` |
 | Database (via PgBouncer) | `postgresql://<host-ip>:5432` | `postgresql://192.168.1.100:5432/umh_v2` |
 | **MCP Addon (optional)** | | |
-| Node-RED MCP Server | `http://<host-ip>:3001` | `http://192.168.1.100:3001` |
-| Grafana MCP Server | `http://<host-ip>:3002` | `http://192.168.1.100:3002` |
+| PostgreSQL MCP Server | `http://<host-ip>:3003` | `http://192.168.1.100:3003` |
 
 ### Finding Your Host IP
 

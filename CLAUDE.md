@@ -33,14 +33,17 @@ Docker Compose stack for [UMH Core](https://github.com/united-manufacturing-hub/
 ## Commands
 
 ```bash
-# Start full stack (core + historian)
-docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml up -d
+# Start full stack (core + historian + MCP for AI development)
+docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml -f examples/mcp/docker-compose.mcp.yaml up -d
 
 # View logs
-docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml logs -f
+docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml -f examples/mcp/docker-compose.mcp.yaml logs -f
 
 # Stop
-docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml down
+docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml -f examples/mcp/docker-compose.mcp.yaml down
+
+# Start without MCP (production)
+docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml up -d
 ```
 
 ## Services & Ports
@@ -56,6 +59,9 @@ docker compose -f docker-compose.yaml -f examples/historian/docker-compose.histo
 | PgBouncer | 5432 | `pgbouncer:5432` |
 | TimescaleDB | (internal) | `timescaledb:5432` |
 | UMH Core | (internal) | `umh-core:8040` |
+| **MCP Addon (AI Integration)** | | |
+| Node-RED MCP | 3001 | `nodered-mcp:3001` |
+| Grafana MCP | 3002 | `grafana-mcp:3002` |
 
 **Note**: NGINX listens on port 8080 internally but is exposed as port 8081 externally.
 
@@ -164,6 +170,36 @@ See `docs/integration-patterns.md` for details on:
 - **Pattern C**: Preload + change detection (used in this repo)
 
 Pattern C enables process mining by tracking full history of state changes.
+
+## Complete MCP Stack for AI Development
+
+**Batteries included** - configure complete MCP stack for enhanced AI assistance:
+
+```bash
+# Documentation Context
+claude mcp add --transport http --scope user gitbook https://docs.umh.app/~gitbook/mcp
+claude mcp add --transport http --scope user postgres-docs https://mcp.tigerdata.com/docs
+claude mcp add --transport http --scope user redpanda https://docs.redpanda.com/mcp
+
+# Live Database Access
+claude mcp add --transport http --scope user postgres-mcp https://github.com/crystaldba/postgres-mcp
+
+# Live Database Integration (when running with MCP addon)
+claude mcp add --transport http --scope user umh-postgres http://localhost:3003
+
+# Verify setup
+claude mcp list
+```
+
+With this complete setup, AI agents have access to:
+- Complete UMH documentation and best practices
+- PostgreSQL/TimescaleDB documentation and optimization guides
+- Redpanda configuration patterns
+- Live database querying against your TimescaleDB via containerized MCP
+- Node-RED and Grafana API access via client-side MCP configuration
+- Integration examples and troubleshooting
+
+**MCP Addon**: `examples/mcp/docker-compose.mcp.yaml` provides containerized PostgreSQL MCP plus instructions for Node-RED/Grafana client-side integration. See `docs/ai-development-guide.md` for comprehensive workflows.
 
 ## Deployment Notes
 
