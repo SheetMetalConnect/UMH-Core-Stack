@@ -1,17 +1,15 @@
 # UMH Core Stack
 
-Turn-key Docker Compose deployment for [United Manufacturing Hub](https://github.com/united-manufacturing-hub/united-manufacturing-hub) — the Swiss Army knife for manufacturing data infrastructure.
+Opinionated Docker Compose deployment for [United Manufacturing Hub](https://github.com/united-manufacturing-hub/united-manufacturing-hub). Pre-configured defaults so you can get started quickly.
 
-**Batteries included:** MQTT, TimescaleDB, Grafana, Node-RED, data flows, and ERP integration patterns.
+## What's Included
 
-## What This Provides
-
-**Infrastructure** (docker-compose):
+**Infrastructure:**
 - HiveMQ CE — MQTT broker
-- TimescaleDB — Time-series database with pre-configured schema
-- Grafana — Dashboards with datasource auto-provisioned
+- TimescaleDB — Time-series database with UMH schema
+- Grafana — Dashboards with datasource pre-configured
 - PgBouncer — Connection pooling
-- Node-RED — Flow programming (Projects + Multiplayer enabled)
+- Node-RED — Dark theme, Projects + Multiplayer enabled
 - Portainer — Container management
 - NGINX — Reverse proxy for webhooks
 
@@ -22,9 +20,9 @@ Turn-key Docker Compose deployment for [United Manufacturing Hub](https://github
 
 **Optional addons:**
 - [Historian](examples/historian) — TimescaleDB + Grafana + PgBouncer
-- [MCP](examples/mcp) — AI/LLM integration for Node-RED and Grafana
+- [MCP](examples/mcp) — AI/LLM integration
 
-**Architecture:** UMH Core runs separately from the stack for reliability and independent updates.
+UMH Core runs separately from the stack for independent updates.
 
 ## Quick Start
 
