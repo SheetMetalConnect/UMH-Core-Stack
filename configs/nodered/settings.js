@@ -3,6 +3,7 @@ module.exports = {
     flowFilePretty: true,
     userDir: "/data",
     editorTheme: {
+        theme: "midnight-red",
         projects: {
             enabled: true,
             workflow: {
