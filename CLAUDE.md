@@ -57,6 +57,20 @@ docker compose -f docker-compose.yaml -f examples/historian/docker-compose.histo
 | TimescaleDB | (internal) | `timescaledb:5432` |
 | UMH Core | (internal) | `umh-core:8040` |
 
+**Note**: NGINX listens on port 8080 internally but is exposed as port 8081 externally.
+
+## Networking
+
+Docker Compose automatically prefixes network names with the project directory name:
+- Directory name: `lve-umh-core` (or your local directory name)
+- Network defined in compose: `umh-network`
+- Actual network name: `lve-umh-core_umh-network`
+
+UMH Core (running as separate container) must connect using the prefixed network name:
+```bash
+docker network ls | grep umh  # Find exact network name
+```
+
 ## Pre-configured Features
 
 **Node-RED** (`configs/nodered/settings.js`):
@@ -66,17 +80,27 @@ docker compose -f docker-compose.yaml -f examples/historian/docker-compose.histo
 
 **Grafana** (`configs/grafana/provisioning/`):
 - TimescaleDB datasource auto-provisioned
+- Connects via PgBouncer connection pooler
+- Credentials from environment variables
 
 **TimescaleDB** (`configs/timescaledb-init/`):
 - Schema with `asset`, `tag`, `tag_string` hypertables
-- ERP schema with `erp_sales_order`, `erp_sales_order_history` tables
+- ERP schema with `erp_sales_order`, `erp_sales_order_history` tables (requires running sql/02-erp-schema.sql)
 - Writer/reader users pre-created
 - Compression enabled (7 days)
+- Automatic hypertable partitioning
+
+**NGINX** (`configs/nginx.conf`):
+- Reverse proxy for UMH Core webhooks
+- Security headers (X-Frame-Options, X-Content-Type-Options, X-XSS-Protection)
+- CORS enabled (allows `*` - restrict in production)
+- Proxies to `umh-core:8040`
 
 ## Gitignored (local only)
 
-- `.env` - Contains AUTH_TOKEN
+- `.env` - Contains AUTH_TOKEN and passwords
 - `data/` - Runtime data, logs, config.yaml
+- `.DS_Store` - macOS filesystem metadata
 
 ## External Resources
 
@@ -94,7 +118,7 @@ Tables in `umh_v2`:
 - `erp_sales_order_history` - Full change history (Pattern C)
 
 Users:
-- `postgres` - Superuser
+- `postgres` - Superuser (password: `umhcore`)
 - `kafkatopostgresqlv2` - Writer (password: `umhcore`)
 - `grafanareader` - Read-only (password: `umhcore`)
 
@@ -107,7 +131,10 @@ All services use `umhcore` as the default password for easy development:
 grep -r "umhcore" . --include="*.yaml" --include="*.example" --include="*.md" --include="*.sh"
 ```
 
-For production, replace all `umhcore` with secure passwords.
+For production, replace all `umhcore` with secure passwords. Generate with:
+```bash
+openssl rand -base64 32
+```
 
 ## Data Flows (Bridges)
 
@@ -138,6 +165,20 @@ See `docs/integration-patterns.md` for details on:
 
 Pattern C enables process mining by tracking full history of state changes.
 
+## Deployment Notes
+
+**UMH Core runs separately** from the Docker Compose stack:
+- Separate container for reliability and independent restarts
+- Must connect to Docker Compose network
+- Example docker run command in README.md
+- Uses volume `umh-core-data` for persistence
+
+**Why separate?**
+- UMH Core can restart without affecting infrastructure
+- Infrastructure can restart without affecting UMH Core
+- Easier to update UMH Core independently
+- Matches production deployment patterns
+
 ## Editing Notes
 
 - Use standard markdown links, not wikilinks
@@ -145,3 +186,36 @@ Pattern C enables process mining by tracking full history of state changes.
 - Test compose changes with `docker compose config`
 - dataFlows are configured via Management Console, not direct config editing
 - All flows are in `examples/databridges/flows/` - single source of truth
+- Always use relative paths in compose files (example: `../../configs/`)
+
+## Troubleshooting
+
+**Network issues:**
+```bash
+# List Docker networks
+docker network ls | grep umh
+
+# Inspect network
+docker network inspect <network-name>
+
+# Connect UMH Core to existing network
+docker network connect <network-name> umh-core
+```
+
+**Database issues:**
+```bash
+# Check TimescaleDB is healthy
+docker exec timescaledb pg_isready -U postgres -d umh_v2
+
+# Verify tables exist
+docker exec timescaledb psql -U postgres -d umh_v2 -c "\dt"
+
+# Check user permissions
+docker exec timescaledb psql -U postgres -d umh_v2 -c "\du"
+```
+
+**Data flow issues:**
+- Check Management Console for flow status
+- Verify AUTH_TOKEN is set correctly
+- Check UMH Core logs: `docker logs umh-core`
+- Verify network connectivity between services

@@ -35,7 +35,7 @@ services:
       - timescaledb_data:/var/lib/postgresql/data
 
       # Initialization scripts (create users, schema, hypertables)
-      - ./configs/timescaledb-init:/docker-entrypoint-initdb.d
+      - ../../configs/timescaledb-init:/docker-entrypoint-initdb.d
 
     networks:
       - timescaledb-network

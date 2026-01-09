@@ -1,0 +1,90 @@
+# UMH Core MCP (Model Context Protocol) Addon
+# Adds MCP servers for Node-RED and Grafana for AI/LLM integration
+#
+# Usage: docker compose -f ../../docker-compose.yaml -f docker-compose.mcp.yaml up
+#
+# IMPORTANT: This requires the core services to be running first
+# See: ../../docker-compose.yaml
+#
+# NOTE: Image names use docker.io/ prefix for Podman compatibility
+
+services:
+  # ============================================================================
+  # Node-RED MCP Server - AI Integration for Flow Development
+  # ============================================================================
+  nodered-mcp:
+    image: docker.io/karavaev/node-red-mcp-server:latest
+    container_name: nodered-mcp
+    restart: unless-stopped
+    
+    environment:
+      # Node-RED connection settings
+      - NODE_RED_URL=http://nodered:1880
+      - NODE_RED_USERNAME=${NODERED_MCP_USERNAME:-}
+      - NODE_RED_PASSWORD=${NODERED_MCP_PASSWORD:-}
+      
+      # MCP server settings
+      - MCP_SERVER_PORT=${MCP_NODERED_PORT:-3001}
+      - MCP_SERVER_NAME=${MCP_NODERED_NAME:-nodered}
+      
+    ports:
+      - "${MCP_NODERED_PORT:-3001}:${MCP_NODERED_PORT:-3001}"
+    
+    networks:
+      - umh-network
+    
+    # Wait for Node-RED to be ready
+    depends_on:
+      - nodered
+    
+    # Healthcheck: Verify MCP server responds
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${MCP_NODERED_PORT:-3001}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ============================================================================
+  # Grafana MCP Server - AI Integration for Dashboard Development  
+  # ============================================================================
+  grafana-mcp:
+    image: docker.io/grafana/mcp-grafana:latest
+    container_name: grafana-mcp
+    restart: unless-stopped
+    
+    environment:
+      # Grafana connection settings (uses internal Docker DNS)
+      - GRAFANA_URL=http://grafana:3000
+      - GRAFANA_TOKEN=${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}
+      
+      # Fallback to basic auth if no service account token
+      - GRAFANA_USERNAME=${GF_ADMIN_USER:-admin}
+      - GRAFANA_PASSWORD=${GF_ADMIN_PASSWORD:-umhcore}
+      
+      # MCP server settings  
+      - MCP_SERVER_PORT=${MCP_GRAFANA_PORT:-3002}
+      
+    ports:
+      - "${MCP_GRAFANA_PORT:-3002}:${MCP_GRAFANA_PORT:-3002}"
+    
+    networks:
+      - umh-network
+    
+    # Wait for Grafana to be ready (from historian addon)
+    depends_on:
+      - grafana
+    
+    # Healthcheck: Verify MCP server responds
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${MCP_GRAFANA_PORT:-3002}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+# Uses existing networks from main docker-compose.yaml:
+# - umh-network: For communication with Node-RED and Grafana services
