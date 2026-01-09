@@ -47,7 +47,7 @@ This document describes the internal and external networking architecture of the
 
 ## Docker Networks
 
-The stack uses two Docker networks for security isolation:
+The stack uses two Docker networks for security isolation. UMH Core is run as a separate container and must be attached to the application network so NGINX, HiveMQ, and PgBouncer can reach it.
 
 ### umh-network (Bridge)
 
@@ -55,13 +55,13 @@ The primary network connecting all services that need to communicate with each o
 
 | Service | Connected | Purpose |
 |---------|-----------|---------|
-| umh-core | Yes | Edge gateway with embedded Kafka (Redpanda) |
 | nginx | Yes | Reverse proxy for webhook endpoints |
 | hivemq | Yes | MQTT broker |
 | nodered | Yes | Flow-based automation |
 | portainer | Yes | Container management UI |
 | grafana | Yes | Visualization dashboards |
 | pgbouncer | Yes | Database connection pooler (bridges to timescaledb-network) |
+| umh-core (external container) | Attach manually | Edge gateway with embedded Kafka (Redpanda) |
 
 ### timescaledb-network (Internal)
 
@@ -93,6 +93,7 @@ These ports are published to the host and accessible from LAN:
 | Portainer Edge | 9443 | `PORT_PORTAINER_EDGE` | `PORT_PORTAINER_EDGE` | 9443 |
 | Grafana | 3000 | 3000 | (fixed) | 3000 |
 | PgBouncer | 5432 | 5432 | (fixed) | 5432 |
+| UMH Core (external container) | 8040, 8051 | not published | n/a | internal only |
 
 ### Internal Ports (Not Exposed)
 
@@ -100,9 +101,30 @@ These ports are only accessible within the Docker network:
 
 | Service | Internal Port | Purpose |
 |---------|--------------|---------|
-| umh-core | 8040 | HTTP/Webhook input (proxied via NGINX) |
-| umh-core | 8051 | Management/GraphQL endpoints |
+| umh-core (external container) | 8040 | HTTP/Webhook input (proxied via NGINX) |
+| umh-core (external container) | 8051 | Management/GraphQL endpoints |
 | timescaledb | 5432 | PostgreSQL (only via PgBouncer) |
+
+### Running UMH Core separately (attach to network)
+
+Launch UMH Core outside the compose stack and attach it to the app network so NGINX/HiveMQ/PgBouncer can reach it:
+
+```bash
+docker run -d --restart unless-stopped --name umh-core \
+  --network lve-umh-core_umh-network \
+  -v umh-core-data:/data \
+  -e AUTH_TOKEN=${AUTH_TOKEN} \
+  -e RELEASE_CHANNEL=${RELEASE_CHANNEL:-stable} \
+  -e API_URL=${API_URL:-https://management.umh.app/api} \
+  -e LOCATION_0=${LOCATION_0:-enterprise} \
+  management.umh.app/oci/united-manufacturing-hub/umh-core:${UMH_VERSION:-latest}
+```
+
+If UMH Core is already running, attach it:
+
+```bash
+docker network connect lve-umh-core_umh-network umh-core
+```
 
 ## Service Discovery (Internal DNS)
 
@@ -235,7 +257,7 @@ Port: 1883
 
 3. Data enters Unified Namespace
    Topic: umh.v1.<LOCATION_0>.<LOCATION_1>.<LOCATION_2>/...
-   Example: umh.v1.Singeling/my/sensor/topic
+   Example: umh.v1.Sittard/my/sensor/topic
 ```
 
 ## Database Access Architecture

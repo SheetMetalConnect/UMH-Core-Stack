@@ -1,0 +1,73 @@
+# ==============================================================================
+# Sales Order to TimescaleDB Persistence
+# ==============================================================================
+# Persists .create and .update messages with upsert + history tracking.
+#
+# Type: Stand-alone Flow (dataFlow)
+#
+# Tables:
+#   - erp_sales_order (current state, upsert)
+#   - erp_sales_order_history (audit trail, insert)
+# ==============================================================================
+
+dataFlow:
+  - name: sales-order-to-timescale
+    desiredState: active
+    dataFlowComponentConfig:
+      benthos:
+        input:
+          uns:
+            umh_topics:
+              - "umh\\.v1\\..*\\._sales_order\\.create"
+              - "umh\\.v1\\..*\\._sales_order\\.update"
+            consumer_group: sales_order_to_timescale
+
+        pipeline:
+          processors:
+            - bloblang: |
+                let action = meta("umh_topic").split(".").index(-1)
+                root = if $action == "create" || $action == "update" { this } else { deleted() }
+                meta action = $action
+
+        output:
+          sql_raw:
+            driver: postgres
+            dsn: postgres://kafkatopostgresqlv2:umhcore@pgbouncer:5432/umh_v2?sslmode=disable
+            query: |
+              WITH upserted AS (
+                INSERT INTO erp_sales_order (
+                  order_id, asset_id, customer_name, milestone,
+                  due_date, order_date, delivered_date, status, change_type
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                ON CONFLICT (order_id, asset_id) DO UPDATE SET
+                  customer_name = EXCLUDED.customer_name,
+                  milestone = EXCLUDED.milestone,
+                  due_date = EXCLUDED.due_date,
+                  order_date = EXCLUDED.order_date,
+                  delivered_date = EXCLUDED.delivered_date,
+                  status = EXCLUDED.status,
+                  change_type = EXCLUDED.change_type,
+                  updated_at = NOW()
+                RETURNING *
+              )
+              INSERT INTO erp_sales_order_history (
+                order_id, asset_id, customer_name, milestone,
+                due_date, order_date, delivered_date, status, change_type
+              )
+              SELECT order_id, asset_id, customer_name, milestone,
+                     due_date, order_date, delivered_date, status, change_type
+              FROM upserted;
+            args_mapping: |
+              [
+                this.order_id,
+                this.asset_id,
+                this.customer_name,
+                this.milestone,
+                this.due_date,
+                this.order_date,
+                this.delivered_date,
+                this.status,
+                meta("action").uppercase()
+              ]
+            max_in_flight: 512

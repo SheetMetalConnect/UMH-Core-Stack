@@ -1,0 +1,60 @@
+# ==============================================================================
+# TimescaleDB Delete Flow
+# ==============================================================================
+# Handles .delete messages — removes records from database.
+#
+# Type: Stand-alone Flow (dataFlow)
+# ==============================================================================
+
+dataFlow:
+  - name: timescale-delete
+    desiredState: active
+    dataFlowComponentConfig:
+      benthos:
+        input:
+          uns:
+            umh_topic: "umh\\.v1\\..*\\._sales_order\\.delete"
+            consumer_group: timescale_delete
+
+        pipeline:
+          processors:
+            - bloblang: |
+                let umh_topic = meta("umh_topic")
+                let action = $umh_topic.split(".").index(-1)
+                root = if $action == "delete" { this } else { deleted() }
+
+            # Resolve asset_id from topic path
+            - branch:
+                processors:
+                  - bloblang: |
+                      let umh_topic = meta("umh_topic")
+                      let parts = $umh_topic.split("_sales_order").index(0).split(".").slice(2, -1)
+                      root.enterprise = parts.index(0).catch("")
+                      root.site = parts.index(1).catch("")
+                      root.area = parts.index(2).catch("")
+                      root.line = parts.index(3).catch("")
+                      root.workcell = parts.index(4).catch("")
+                      root.origin_id = parts.index(5).catch("")
+
+                  - sql_select:
+                      driver: postgres
+                      dsn: postgres://kafkatopostgresqlv2:umhcore@pgbouncer:5432/umh_v2?sslmode=disable
+                      table: asset
+                      where: id = get_asset_id(?, ?, ?, ?, ?, ?)
+                      args_mapping: "[ this.enterprise, this.site, this.area, this.line, this.workcell, this.origin_id ]"
+                      columns: [id]
+
+                  - bloblang: root.asset_id = this.index(0).id
+
+                  - catch:
+                      - log:
+                          level: ERROR
+                          message: "Asset lookup failed for delete: ${!meta(\"umh_topic\")}"
+                result_map: root.asset_id = this.asset_id
+
+        output:
+          sql_raw:
+            driver: postgres
+            dsn: postgres://kafkatopostgresqlv2:umhcore@pgbouncer:5432/umh_v2?sslmode=disable
+            query: DELETE FROM erp_sales_order WHERE order_id = $1 AND asset_id = $2;
+            args_mapping: "[ this.order_id, this.asset_id ]"

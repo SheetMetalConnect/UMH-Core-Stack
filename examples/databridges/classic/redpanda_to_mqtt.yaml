@@ -1,0 +1,35 @@
+# Redpanda to MQTT (Classic / Kubernetes)
+# For UMH Core, see: ../flows/uns_to_mqtt_feedback.yaml
+
+input:
+  kafka_franz:
+    seed_brokers:
+      - united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092
+    topics:
+      - umh.v1.*._sales_order.update
+      - umh.v1.*._sales_order.create
+      - umh.v1.*._sales_order.duplicate
+      - umh.v1.*._sales_order.delete
+    regexp_topics: true
+    consumer_group: generic_redpanda_to_mqtt
+    client_id: generic_redpanda_to_mqtt
+
+pipeline:
+  processors:
+    - bloblang: |
+        let kafka_topic = meta("kafka_topic")
+        let kafka_key = meta("kafka_key")
+        meta mqtt_topic = $kafka_topic.replace(".", "/")
+        if $kafka_key == "create" || $kafka_key == "update" || $kafka_key == "duplicate" {
+          root = this
+        } else {
+          root = deleted()
+        }
+
+output:
+  mqtt:
+    urls:
+      - united-manufacturing-hub-mqtt.united-manufacturing-hub.svc.cluster.local:1883
+    client_id: generic_redpanda_to_mqtt
+    dynamic_client_id_suffix: nanoid
+    topic: ${! meta("mqtt_topic") }

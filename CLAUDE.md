@@ -7,6 +7,7 @@ Docker Compose stack for [UMH Core](https://github.com/united-manufacturing-hub/
 ```
 .
 ├── README.md               # Public intro
+├── PROJECT.md              # Project overview and goals
 ├── CLAUDE.md               # Agent instructions (you are here)
 ├── docker-compose.yaml     # Core stack
 ├── .env.example            # Environment template
@@ -16,11 +17,17 @@ Docker Compose stack for [UMH Core](https://github.com/united-manufacturing-hub/
 │   ├── grafana/provisioning/
 │   └── timescaledb-init/
 ├── docs/                   # Documentation
-│   ├── setup.md            # Initial setup guide
+│   ├── integration-patterns.md  # Pattern A/B/C explanation
 │   ├── historian.md        # TimescaleDB addon
-│   ├── historian-flow.md   # Pre-built historian bridge (dataFlow)
-│   └── networking.md       # Port and service info
-└── examples/historian/     # TimescaleDB + Grafana addon
+│   ├── networking.md       # Port and service info
+│   └── ...
+└── examples/
+    ├── databridges/
+    │   ├── README.md
+    │   ├── flows/          # UMH Core flows (6 yaml files)
+    │   ├── sql/            # Database schema (02-erp-schema.sql)
+    │   └── classic/        # Reference: k8s format (5 yaml + README)
+    └── historian/          # TimescaleDB + Grafana addon
 ```
 
 ## Commands
@@ -62,6 +69,7 @@ docker compose -f docker-compose.yaml -f examples/historian/docker-compose.histo
 
 **TimescaleDB** (`configs/timescaledb-init/`):
 - Schema with `asset`, `tag`, `tag_string` hypertables
+- ERP schema with `erp_sales_order`, `erp_sales_order_history` tables
 - Writer/reader users pre-created
 - Compression enabled (7 days)
 
@@ -82,6 +90,8 @@ Tables in `umh_v2`:
 - `asset` - Asset metadata
 - `tag` - Numeric time-series
 - `tag_string` - Text time-series
+- `erp_sales_order` - Current ERP state (Pattern C)
+- `erp_sales_order_history` - Full change history (Pattern C)
 
 Users:
 - `postgres` - Superuser
@@ -99,21 +109,34 @@ grep -r "umhcore" . --include="*.yaml" --include="*.example" --include="*.md" --
 
 For production, replace all `umhcore` with secure passwords.
 
-## Historian Bridge (dataFlow)
+## Data Flows (Bridges)
 
-The historian bridge writes MQTT data to TimescaleDB. It's adapted from UMH Classic's `kafka_to_postgresql_historian_bridge`.
+All flows are in `examples/databridges/flows/`. Deploy via Management Console:
+
+| Flow | Purpose |
+|------|---------|
+| `historian.yaml` | UNS → TimescaleDB (time-series) |
+| `mqtt_to_uns_bridge.yaml` | External MQTT → UNS |
+| `sales_order_process.yaml` | Deduplication logic |
+| `sales_order_to_timescale.yaml` | Persist + history tracking |
+| `timescale_delete.yaml` | Delete handling |
+| `uns_to_mqtt_feedback.yaml` | State change notifications |
 
 **How to deploy:**
-1. Copy the YAML from `docs/historian-flow.md`
+1. Copy the YAML from `examples/databridges/flows/<flow-name>.yaml`
 2. Paste into Management Console under dataFlows
 3. UMH Core automatically deploys the bridge
 
-The bridge uses Benthos/Redpanda Connect components:
-- `mqtt` input - subscribes to `umh/#`
-- `branch` processor with `cached` - caches asset IDs
-- `sql_raw` processor - looks up/creates asset IDs
-- `switch` output - routes numeric→`tag`, string→`tag_string`
-- `sql_insert` output - batched inserts
+The flows use Benthos/Redpanda Connect components with consistent asset mapping.
+
+## Integration Patterns
+
+See `docs/integration-patterns.md` for details on:
+- **Pattern A**: Direct write (UNS → TimescaleDB)
+- **Pattern B**: Pull on demand (UNS triggers fetch from ERP)
+- **Pattern C**: Preload + change detection (used in this repo)
+
+Pattern C enables process mining by tracking full history of state changes.
 
 ## Editing Notes
 
@@ -121,3 +144,4 @@ The bridge uses Benthos/Redpanda Connect components:
 - Keep `.env.example` updated when adding env vars
 - Test compose changes with `docker compose config`
 - dataFlows are configured via Management Console, not direct config editing
+- All flows are in `examples/databridges/flows/` - single source of truth

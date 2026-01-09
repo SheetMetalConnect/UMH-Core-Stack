@@ -8,32 +8,6 @@
 
 services:
   # ============================================================================
-  # UMH Core - Edge Gateway
-  # ============================================================================
-  umh-core:
-    image: management.umh.app/oci/united-manufacturing-hub/umh-core:${UMH_VERSION:-latest}
-    container_name: umh-core
-    restart: unless-stopped
-
-    # Security: Run as non-root user (UID 1000) if your Docker host supports it
-    # user: "1000:1000"
-
-    environment:
-      - AUTH_TOKEN=${AUTH_TOKEN:?AUTH_TOKEN is required}
-      - RELEASE_CHANNEL=${RELEASE_CHANNEL:-stable}
-      - API_URL=${API_URL:-https://management.umh.app/api}
-      - LOCATION_0=${LOCATION_0:-enterprise}
-      - LOCATION_1=${LOCATION_1:-}
-      - LOCATION_2=${LOCATION_2:-}
-
-    volumes:
-      # CRITICAL: ./data must be writable by UID 1000
-      - ./data:/data
-
-    networks:
-      - umh-network
-
-  # ============================================================================
   # NGINX - Reverse Proxy (security layer + webhook routing)
   # ============================================================================
   nginx:
@@ -49,9 +23,6 @@ services:
 
     networks:
       - umh-network
-
-    depends_on:
-      - umh-core
 
   # ============================================================================
   # HiveMQ CE - MQTT Broker

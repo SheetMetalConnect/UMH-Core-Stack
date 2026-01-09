@@ -22,21 +22,42 @@ Edit `.env` and set:
 
 Set credentials once before first deployment; the database init scripts apply them on first boot.
 
-2) Start the stack
+2) Start the infrastructure stack (no UMH Core)
 
-Turnkey stack (core + NGINX + connectivity + historian + PgBouncer + Grafana):
+Turnkey infra (NGINX + connectivity + historian + PgBouncer + Grafana):
 
 ```bash
 docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml up -d
 ```
 
-Core-only dev mode (no historian):
+Infra-only (no historian):
 
 ```bash
 docker compose up -d
 ```
 
-3) Verify services
+3) Run UMH Core separately and attach to the stack network
+
+```bash
+docker run -d --restart unless-stopped --name umh-core \
+  --network lve-umh-core_umh-network \
+  -v umh-core-data:/data \
+  -e AUTH_TOKEN=${AUTH_TOKEN} \
+  -e RELEASE_CHANNEL=${RELEASE_CHANNEL:-stable} \
+  -e API_URL=${API_URL:-https://management.umh.app/api} \
+  -e LOCATION_0=${LOCATION_0:-enterprise} \
+  -e LOCATION_1=${LOCATION_1:-} \
+  -e LOCATION_2=${LOCATION_2:-} \
+  management.umh.app/oci/united-manufacturing-hub/umh-core:${UMH_VERSION:-latest}
+```
+
+If you launched UMH Core without `--network`, attach it after the fact:
+
+```bash
+docker network connect lve-umh-core_umh-network umh-core
+```
+
+4) Verify services
 
 ```bash
 docker compose -f docker-compose.yaml -f examples/historian/docker-compose.historian.yaml ps
@@ -62,6 +83,8 @@ create bridges and historian flows in the Management Console.
 | PgBouncer | tcp://localhost:5432 | Uses `POSTGRES_*` + historian users |
 
 Node-RED is configured with Projects + Multiplayer enabled in `configs/nodered/settings.js`.
+
+> **UMH Core runtime:** UMH Core now runs as a separate container. Make sure it is attached to `lve-umh-core_umh-network` so NGINX (`http://localhost:8081`) and HiveMQ (`mqtt://localhost:1883`) can reach it.
 
 > **Note:** Node-RED displays a warning on startup about mounting a volume to `/data`. This warning can be safely ignored - the stack uses a named volume (`nodered-data`) which correctly persists all flows, configurations, and installed nodes across container restarts and upgrades.
 
