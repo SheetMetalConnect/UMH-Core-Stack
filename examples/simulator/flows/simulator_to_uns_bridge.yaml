@@ -1,0 +1,56 @@
+# ==============================================================================
+# MetalFab Simulator → UNS Bridge
+# ==============================================================================
+# Bridges sensor data from the MetalFab UNS Simulator (running on HiveMQ)
+# into UMH Core's internal UNS. Required for the historian flow to persist
+# simulator data to TimescaleDB.
+#
+# Data flow:
+#   MetalFab Simulator → HiveMQ → [this bridge] → UNS → historian → TimescaleDB
+#
+# The simulator publishes to two data contracts:
+#   _raw               — All machine sensors, OEE, counters (→ historian.yaml)
+#   _energy-monitor_v1 — Energy readings with typed contract (→ energy_historian.yaml)
+#
+# Without this bridge, simulator data stays on HiveMQ and never reaches
+# the historian flow (which reads from UMH Core's internal bus).
+#
+# Deploy: Management Console → Data Flows → Stand-alone → Add → paste this
+#
+# Simulator topics:
+#   umh/v1/metalfab/{site}/{dept}/{machine}/_raw/{tag}
+#   umh/v1/metalfab/{site}/energy/main/_raw/{tag}
+#   umh/v1/metalfab/{site}/energy/main/_energy-monitor_v1/{tag}
+#   umh/v1/metalfab/{site}/finishing/{line}/_raw/{tag}
+#
+# See: https://github.com/SheetMetalConnect/metalfab-uns-simulator
+# ==============================================================================
+
+input:
+  mqtt:
+    auto_replay_nacks: false
+    client_id: simulator_to_uns_bridge
+    dynamic_client_id_suffix: nanoid
+    urls:
+      - tcp://hivemq:1883
+    topics:
+      # --- _raw sensor data (all ISA-95 depths) ---
+      - umh/v1/+/+/_raw/#
+      - umh/v1/+/+/+/_raw/#
+      - umh/v1/+/+/+/+/_raw/#
+      - umh/v1/+/+/+/+/+/_raw/#
+      - umh/v1/+/+/+/+/+/+/_raw/#
+      # --- _energy-monitor_v1 data contract ---
+      - umh/v1/+/+/+/_energy-monitor_v1/#
+      - umh/v1/+/+/+/+/_energy-monitor_v1/#
+      - umh/v1/+/+/+/+/+/_energy-monitor_v1/#
+
+pipeline:
+  processors:
+    - bloblang: |
+        let mqtt_topic = meta("mqtt_topic").or("")
+        root = if $mqtt_topic == "" { deleted() } else { this }
+        meta umh_topic = $mqtt_topic.replace("/", ".")
+
+output:
+  uns: {}

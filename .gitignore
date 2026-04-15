@@ -1,0 +1,11 @@
+united-manufacturing-hub/
+
+# Local environment (contains AUTH_TOKEN)
+.env
+data/
+certs/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride

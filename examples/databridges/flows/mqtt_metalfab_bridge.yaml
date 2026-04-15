@@ -1,0 +1,20 @@
+# MQTT Bridge — MetalFab Cloud Simulator → UNS
+input:
+  mqtt:
+    auto_replay_nacks: false
+    client_id: mqtt_metalfab_bridge
+    dynamic_client_id_suffix: nanoid
+    urls:
+      - tcp://95.217.14.139:1883
+    topics:
+      - umh/v1/metalfab/+/+/+/_raw/#
+
+pipeline:
+  processors:
+    - bloblang: |
+        let mqtt_topic = meta("mqtt_topic").or("")
+        root = if $mqtt_topic == "" { deleted() } else { this }
+        meta umh_topic = $mqtt_topic.replace("/", ".")
+
+output:
+  uns: {}

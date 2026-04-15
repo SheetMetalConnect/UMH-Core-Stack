@@ -1,0 +1,184 @@
+# ==============================================================================
+# UMH Core Starter Kit — Docker Compose Stack
+# ==============================================================================
+# UMH Core + TimescaleDB + Grafana + HiveMQ + Node-RED + Portainer
+#
+# Start:  cp .env.example .env && docker compose up -d
+# Stop:   docker compose down
+# Reset:  docker compose down -v  (destroys all data!)
+# ==============================================================================
+
+services:
+  # ============================================================================
+  # UMH Core - Industrial Data Hub
+  # ============================================================================
+  umh:
+    image: management.umh.app/oci/united-manufacturing-hub/umh-core:${UMH_VERSION:-v0.44.15}
+    container_name: umh-core
+    restart: unless-stopped
+    volumes:
+      - umh-core-data:/data
+    environment:
+      - AUTH_TOKEN=${AUTH_TOKEN:?Set AUTH_TOKEN in .env from https://management.umh.app}
+      - RELEASE_CHANNEL=stable
+      - LOCATION_0=${UMH_ENTERPRISE:-mycompany}
+      - LOCATION_1=${UMH_SITE:-factory1}
+      - API_URL=https://management.umh.app/api
+    networks:
+      - umh-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/metrics || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    depends_on:
+      hivemq:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+
+  # ============================================================================
+  # TimescaleDB - Time-Series Database
+  # ============================================================================
+  timescaledb:
+    image: management.umh.app/oci/timescale/timescaledb:2.24.0-pg17
+    container_name: timescaledb
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-umh}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - TIMESCALEDB_TELEMETRY=off
+      - TS_TUNE_MEMORY=${TS_TUNE_MEMORY:-4GB}
+      - TS_TUNE_NUM_CPUS=${TS_TUNE_NUM_CPUS:-2}
+    volumes:
+      - timescaledb-data:/var/lib/postgresql/data
+      - ./configs/timescaledb-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - umh-network
+      - timescaledb-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h timescaledb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # Grafana - Visualization Platform
+  # ============================================================================
+  grafana:
+    image: management.umh.app/oci/grafana/grafana:12.3.0
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:-changeme}
+      - POSTGRES_DB=${POSTGRES_DB:-umh}
+      - HISTORIAN_READER_USER=${HISTORIAN_READER_USER:-grafanareader}
+      - HISTORIAN_READER_PASSWORD=${HISTORIAN_READER_PASSWORD:-changeme}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_DEFAULT_TIMEZONE=${TZ:-Europe/Amsterdam}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    networks:
+      - umh-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://grafana:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+
+  # ============================================================================
+  # HiveMQ CE - Local MQTT Broker
+  # ============================================================================
+  hivemq:
+    image: docker.io/hivemq/hivemq-ce:latest
+    container_name: hivemq
+    restart: unless-stopped
+    environment:
+      - HIVEMQ_ALLOW_ALL_CLIENTS=true
+      - JAVA_OPTS=-Xmx512m -Xms256m
+    ports:
+      - "${PORT_MQTT:-1883}:1883"
+      - "${PORT_MQTT_WS:-8083}:8000"
+    volumes:
+      - hivemq-data:/opt/hivemq/data
+      - hivemq-extensions:/opt/hivemq/extensions
+    networks:
+      - umh-network
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/1883 && exec 4<>/dev/tcp/127.0.0.1/8000'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ============================================================================
+  # Node-RED - Flow-Based Programming
+  # ============================================================================
+  nodered:
+    image: docker.io/nodered/node-red:latest
+    container_name: nodered
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-Europe/Amsterdam}
+    ports:
+      - "${PORT_NODERED:-1880}:1880"
+    volumes:
+      - nodered-data:/data
+      - ./configs/nodered/settings.js:/data/settings.js:ro
+    networks:
+      - umh-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:1880/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ============================================================================
+  # Portainer - Container Management UI
+  # ============================================================================
+  portainer:
+    image: docker.io/portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    ports:
+      - "${PORT_PORTAINER:-9000}:9000"
+      - "${PORT_PORTAINER_EDGE:-9443}:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer-data:/data
+    networks:
+      - umh-network
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  umh-network:
+    driver: bridge
+  timescaledb-network:
+    internal: true
+
+# ==============================================================================
+# Volumes
+# ==============================================================================
+volumes:
+  umh-core-data: {}
+  timescaledb-data: {}
+  grafana-data: {}
+  hivemq-data: {}
+  hivemq-extensions: {}
+  nodered-data: {}
+  portainer-data: {}

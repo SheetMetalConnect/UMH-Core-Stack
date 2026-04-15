@@ -1,0 +1,34 @@
+# ==============================================================================
+# MQTT Bridge — External MQTT Broker → UNS
+# ==============================================================================
+# Bridges sensor data from an external MQTT broker into the UNS.
+# Works with any MQTT broker (HiveMQ, Mosquitto, EMQX, cloud brokers, etc.)
+#
+# Configuration:
+#   - Set broker URL (line 17)
+#   - Set topic patterns (line 19+)
+#
+# Deploy: Management Console → Data Flows → Stand-alone → Add
+# ==============================================================================
+
+input:
+  mqtt:
+    auto_replay_nacks: false
+    client_id: mqtt_bridge
+    dynamic_client_id_suffix: nanoid
+    urls:
+      - tcp://YOUR_BROKER_IP:1883
+    topics:
+      # _raw sensor data (adjust depth/patterns to match your broker)
+      - umh/v1/+/+/+/+/_raw/#
+      - umh/v1/+/+/+/_raw/#
+
+pipeline:
+  processors:
+    - bloblang: |
+        let mqtt_topic = meta("mqtt_topic").or("")
+        root = if $mqtt_topic == "" { deleted() } else { this }
+        meta umh_topic = $mqtt_topic.replace("/", ".")
+
+output:
+  uns: {}

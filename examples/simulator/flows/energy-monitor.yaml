@@ -1,0 +1,55 @@
+# ==============================================================================
+# Energy Monitor — Data Model Definition (Educational Example)
+# ==============================================================================
+# This shows how UMH data models work. Instead of dumping everything into _raw,
+# you define a typed structure that UMH Core validates at runtime.
+#
+# To use this:
+#   1. Management Console → Data Models → Add Data Model
+#   2. Name: energy-monitor, Version: v1
+#   3. Paste the structure below
+#   4. UMH auto-creates the contract: _energy-monitor_v1
+#   5. Any bridge publishing to _energy-monitor_v1 gets validated
+#
+# Topic mapping (structure → UNS topics):
+#   consumption_kw      → umh/v1/{enterprise}/{site}/energy/main/_energy-monitor_v1/consumption_kw
+#   solar_generation_kw → umh/v1/{enterprise}/{site}/energy/main/_energy-monitor_v1/solar_generation_kw
+#   grid_import_kw      → umh/v1/{enterprise}/{site}/energy/main/_energy-monitor_v1/grid_import_kw
+#   solar_coverage_pct  → umh/v1/{enterprise}/{site}/energy/main/_energy-monitor_v1/solar_coverage_pct
+#   daily_consumption_kwh → .../_energy-monitor_v1/daily_consumption_kwh
+#   daily_solar_kwh     → .../_energy-monitor_v1/daily_solar_kwh
+#   daily_cost_eur      → .../_energy-monitor_v1/daily_cost_eur
+#
+# Why data contracts matter:
+#   - _raw accepts ANYTHING — great for exploration, bad for production
+#   - _energy-monitor_v1 only accepts these 7 fields, all numeric
+#   - If a bridge sends "temperature_c" to this contract, UMH rejects it
+#   - This prevents bad data from reaching your historian
+#
+# See: https://docs.umh.app/usage/data-modeling/data-models
+# ==============================================================================
+
+datamodels:
+  - name: energy-monitor
+    version:
+      v1:
+        structure:
+          # Real-time power readings (kW)
+          consumption_kw:
+            _payloadshape: timeseries-number
+          solar_generation_kw:
+            _payloadshape: timeseries-number
+          grid_import_kw:
+            _payloadshape: timeseries-number
+
+          # Calculated metric
+          solar_coverage_pct:
+            _payloadshape: timeseries-number
+
+          # Daily aggregates
+          daily_consumption_kwh:
+            _payloadshape: timeseries-number
+          daily_solar_kwh:
+            _payloadshape: timeseries-number
+          daily_cost_eur:
+            _payloadshape: timeseries-number

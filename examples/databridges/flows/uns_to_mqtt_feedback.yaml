@@ -1,0 +1,37 @@
+# ==============================================================================
+# Generic UNS to MQTT Feedback Bridge
+# ==============================================================================
+# Forwards .create / .update / .duplicate messages from UNS back to MQTT
+# so external subscribers can see processed results.
+#
+# Paste into: UMH Core UI → Data Flows → New → Benthos
+# Name:       generic_redpanda_to_mqtt
+#
+# To add a new entity: add it to the regex alternation below.
+# ==============================================================================
+
+input:
+  uns:
+    umh_topics:
+      - "umh\\.v1\\..*\\._(sales_order|sales_item|work_order)\\.(create|update|duplicate|delete)"
+    consumer_group: generic_redpanda_to_mqtt
+
+pipeline:
+  processors:
+    - bloblang: |
+        let umh_topic = meta("umh_topic")
+        let action = $umh_topic.split(".").index(-1)
+        meta mqtt_topic = $umh_topic.replace(".", "/")
+        root = if $action == "create" || $action == "update" || $action == "duplicate" {
+          this
+        } else {
+          deleted()
+        }
+
+output:
+  mqtt:
+    client_id: generic_redpanda_to_mqtt
+    dynamic_client_id_suffix: nanoid
+    topic: ${! meta("mqtt_topic") }
+    urls:
+      - tcp://hivemq:1883

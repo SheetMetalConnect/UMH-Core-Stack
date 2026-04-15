@@ -1,0 +1,107 @@
+# ==============================================================================
+# ERP Entity Process Flow (Deduplication) — TEMPLATE
+# ==============================================================================
+# Compares incoming .process messages against database to classify as
+# create, update, or duplicate — then republishes with the action type.
+#
+# To adapt for your entity:
+#   1. Replace ENTITY_NAME with your entity (e.g., sales_order, work_order)
+#   2. Replace TABLE_NAME with your DB table (e.g., erp_sales_orders)
+#   3. Replace PRIMARY_KEY with your entity's ID column (e.g., order_id)
+#   4. Replace COMPARE_FIELDS with the fields to check for changes
+#
+# Topic flow:
+#   umh.v1.{location}._ENTITY_NAME.process
+#     → (SQL lookup + comparison)
+#     → umh.v1.{location}._ENTITY_NAME.create|update|duplicate
+#
+# Key patterns:
+#   - "no_match" sentinel for new records (not null/empty)
+#   - root = this before root.query = deleted() (prevents empty payload)
+#   - error_reason guard before topic rewriting
+#   - asset_id != null guard to drop unresolvable messages
+#
+# Deploy: Management Console → Data Flows → Stand-alone → Add
+# ==============================================================================
+
+input:
+  uns:
+    umh_topic: "umh\\.v1\\..*\\._ENTITY_NAME\\.process"
+    consumer_group: ENTITY_NAME_process
+
+pipeline:
+  processors:
+    - bloblang: |
+        let umh_topic = meta("umh_topic")
+        let action = $umh_topic.split(".").index(-1)
+        root = if $action == "process" { this } else { deleted() }
+
+    # Resolve asset_id from topic path
+    - branch:
+        processors:
+          - bloblang: |
+              let umh_topic = meta("umh_topic")
+              let parts = $umh_topic.split("_ENTITY_NAME").index(0).split(".").slice(2)
+              root.enterprise = $parts.index(0).catch("")
+              root.site = $parts.index(1).catch("")
+              root.area = $parts.index(2).catch("")
+              root.line = $parts.index(3).catch("")
+
+          - sql_select:
+              driver: postgres
+              dsn: ${DB_DSN}
+              table: asset
+              columns: [id]
+              where: enterprise = $1 AND site = $2 AND area = $3 AND line = $4
+              args_mapping: "[ this.enterprise, this.site, this.area, this.line ]"
+
+          - bloblang: |
+              root.asset_id = if this.type() == "array" && this.length() > 0 {
+                this.index(0).id
+              } else if this.type() == "object" && this.id != null {
+                this.id
+              } else {
+                null
+              }
+        result_map: root.asset_id = this.asset_id
+
+    - bloblang: root = if this.asset_id != null { this } else { deleted() }
+
+    # Query existing record
+    - branch:
+        processors:
+          - sql_select:
+              driver: postgres
+              dsn: ${DB_DSN}
+              table: TABLE_NAME
+              columns: ["*"]
+              where: PRIMARY_KEY = $1 AND asset_id = $2
+              args_mapping: "[ this.PRIMARY_KEY, this.asset_id ]"
+        result_map: |
+          root.query = if this.length() == 0 {
+            "no_match"
+          } else {
+            this.index(0)
+          }
+
+    # Determine change type
+    # Replace COMPARE_FIELDS with: root.field1 == $query.field1 && root.field2 == $query.field2 && ...
+    - bloblang: |
+        let query = this.query
+        root = this
+        root.query = deleted()
+        let change_type = if COMPARE_FIELDS {
+          "duplicate"
+        } else if $query == "no_match" {
+          "create"
+        } else {
+          "update"
+        }
+        let umh_topic = meta("umh_topic")
+        meta umh_topic = if !this.exists("error_reason") {
+          $umh_topic.trim_suffix("process") + $change_type
+        }
+        meta umh_key = $change_type
+
+output:
+  uns: {}

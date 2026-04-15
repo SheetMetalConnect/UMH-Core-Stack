@@ -1,0 +1,97 @@
+# ==============================================================================
+# Modbus Solar Inverter Bridge → UNS
+# ==============================================================================
+# Reads Modbus TCP holding registers from the solar inverter simulator
+# and publishes each value as a separate _raw tag in the UNS.
+#
+# Target topic: umh.v1.mycompany.factory1.solar._raw.*
+# Poll interval: 5 seconds
+# Simulator: 95.217.14.139:5020
+#
+# Registers (all Float32 = 2 holding registers each):
+#   0:  dc_power_w
+#   2:  ac_power_w
+#   4:  daily_yield_kwh
+#   8:  dc_voltage_v
+#   10: dc_current_a
+#   12: panel_temperature_c
+#   14: inverter_status
+#   16: grid_frequency_hz
+# ==============================================================================
+
+input:
+  modbus:
+    controller: "tcp://95.217.14.139:5020"
+    transmissionMode: TCP
+    slaveIDs:
+      - 1
+    timeBetweenReads: 5s
+    timeout: 3s
+    byteOrder: ABCD
+    addresses:
+      - name: dc_power_w
+        address: 0
+        type: holding
+        length: 2
+        dataType: FLOAT32
+      - name: ac_power_w
+        address: 2
+        type: holding
+        length: 2
+        dataType: FLOAT32
+      - name: daily_yield_kwh
+        address: 4
+        type: holding
+        length: 2
+        dataType: FLOAT32
+      - name: dc_voltage_v
+        address: 8
+        type: holding
+        length: 2
+        dataType: FLOAT32
+      - name: dc_current_a
+        address: 10
+        type: holding
+        length: 2
+        dataType: FLOAT32
+      - name: panel_temperature_c
+        address: 12
+        type: holding
+        length: 2
+        dataType: FLOAT32
+      - name: inverter_status
+        address: 14
+        type: holding
+        length: 2
+        dataType: FLOAT32
+      - name: grid_frequency_hz
+        address: 16
+        type: holding
+        length: 2
+        dataType: FLOAT32
+
+pipeline:
+  processors:
+    # The modbus plugin emits one message per read cycle with all register values.
+    # Fan out into individual UNS messages per tag.
+    - bloblang: |
+        let data = this
+        let tags = ["dc_power_w", "ac_power_w", "daily_yield_kwh", "dc_voltage_v", "dc_current_a", "panel_temperature_c", "inverter_status", "grid_frequency_hz"]
+        root = $tags.map_each(tag -> {
+          "tag_name": tag,
+          "value": $data.get(tag).catch(null),
+          "timestamp_ms": now().ts_unix_milli()
+        }).filter(item -> item.value != null)
+
+    - unarchive:
+        format: json_array
+
+    - bloblang: |
+        meta location_path = "mycompany.factory1.solar"
+        meta data_contract = "_raw"
+        meta tag_name = this.tag_name
+        root.value = this.value
+        root.timestamp_ms = this.timestamp_ms
+
+output:
+  uns: {}

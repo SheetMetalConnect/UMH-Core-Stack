@@ -1,0 +1,81 @@
+# ==============================================================================
+# Energy Historian — _energy-monitor_v1 → TimescaleDB
+# ==============================================================================
+# Persists validated energy data from the _energy-monitor_v1 data contract.
+# This is the data contract counterpart to historian.yaml (_raw).
+#
+# The difference:
+#   - historian.yaml catches ALL _raw data (any tag, any value, no validation)
+#   - This flow catches ONLY _energy-monitor_v1 data (7 defined fields, numeric)
+#
+# You don't NEED this flow if you're already using _raw for energy data.
+# This exists as an educational example showing how data contracts enable
+# targeted, type-safe persistence — useful when scaling across an enterprise.
+#
+# Deploy: Management Console → Data Flows → Stand-alone → Add → paste this
+#
+# Requires:
+#   - energy-monitor data model created in Management Console (see models/)
+#   - get_asset_id() function in TimescaleDB (from configs/timescaledb-init/)
+#   - DB_DSN env var set in UMH Core
+#
+# See: https://docs.umh.app/usage/data-modeling/data-contracts
+# ==============================================================================
+
+input:
+  uns:
+    umh_topic: "umh\\.v1\\..+\\._energy-monitor_v1\\..+"
+    consumer_group: energy-historian-v1
+
+pipeline:
+  processors:
+    - bloblang: |
+        let umh_topic = meta("umh_topic")
+        let parts = $umh_topic.split(".")
+
+        # Find _energy-monitor_v1 position
+        let contract_idx = -1
+        let contract_idx = if $parts.index(0).catch("") == "_energy-monitor_v1" { 0 } else { $contract_idx }
+        let contract_idx = if $parts.index(1).catch("") == "_energy-monitor_v1" { 1 } else { $contract_idx }
+        let contract_idx = if $parts.index(2).catch("") == "_energy-monitor_v1" { 2 } else { $contract_idx }
+        let contract_idx = if $parts.index(3).catch("") == "_energy-monitor_v1" { 3 } else { $contract_idx }
+        let contract_idx = if $parts.index(4).catch("") == "_energy-monitor_v1" { 4 } else { $contract_idx }
+        let contract_idx = if $parts.index(5).catch("") == "_energy-monitor_v1" { 5 } else { $contract_idx }
+        let contract_idx = if $parts.index(6).catch("") == "_energy-monitor_v1" { 6 } else { $contract_idx }
+        let contract_idx = if $parts.index(7).catch("") == "_energy-monitor_v1" { 7 } else { $contract_idx }
+        let contract_idx = if $parts.index(8).catch("") == "_energy-monitor_v1" { 8 } else { $contract_idx }
+        let contract_idx = if $parts.index(9).catch("") == "_energy-monitor_v1" { 9 } else { $contract_idx }
+
+        root = if $contract_idx < 0 { deleted() } else { this }
+
+        # Location: everything between "v1" (index 1) and the contract
+        let loc_parts = $parts.slice(2, $contract_idx)
+
+        # Tag name: everything after the contract, joined with dots
+        let tag_parts = $parts.slice($contract_idx + 1)
+        meta tag_name = $tag_parts.join(".")
+
+        # ISA-95 hierarchy
+        meta enterprise = $loc_parts.index(0).catch("")
+        meta site = $loc_parts.index(1).catch("")
+        meta area = $loc_parts.index(2).catch("")
+        meta line = $loc_parts.index(3).catch("")
+        meta workcell = $loc_parts.index(4).catch("")
+        meta origin_id = $loc_parts.index(5).catch("")
+
+    - bloblang: |
+        let val = this.value.catch(this)
+        root.tag_name = meta("tag_name")
+        root.value = $val
+
+# Energy data is always numeric — no need for string fallback
+output:
+  sql_raw:
+    driver: postgres
+    dsn: ${DB_DSN}
+    query: |
+      INSERT INTO tag (time, asset_id, tag_name, value, origin)
+      VALUES (NOW(), get_asset_id($1, $2, $3, $4, $5, $6), $7, $8, 'energy-monitor-v1')
+    args_mapping: |
+      [ meta("enterprise"), meta("site"), meta("area"), meta("line"), meta("workcell"), meta("origin_id"), this.tag_name, this.value.number() ]
+    max_in_flight: 64

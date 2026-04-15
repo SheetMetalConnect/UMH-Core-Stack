@@ -1,0 +1,70 @@
+# ==============================================================================
+# Generic MQTT to UNS Bridge
+# ==============================================================================
+# Subscribes to entity MQTT topics and bridges them into the UNS (Redpanda).
+# Each entity needs 6 wildcard depths x 2 actions (process + delete).
+#
+# Paste into: UMH Core UI → Data Flows → New → Benthos
+# Name:       generic_mqtt_to_uns
+#
+# To add a new entity: copy a topic block and replace the entity name.
+# ==============================================================================
+
+input:
+  mqtt:
+    auto_replay_nacks: false
+    client_id: generic_mqtt_to_uns
+    dynamic_client_id_suffix: nanoid
+    urls:
+      - tcp://hivemq:1883
+    topics:
+      # --- _sales_order ---
+      - umh/v1/+/_sales_order/process
+      - umh/v1/+/+/_sales_order/process
+      - umh/v1/+/+/+/_sales_order/process
+      - umh/v1/+/+/+/+/_sales_order/process
+      - umh/v1/+/+/+/+/+/_sales_order/process
+      - umh/v1/+/+/+/+/+/+/_sales_order/process
+      - umh/v1/+/_sales_order/delete
+      - umh/v1/+/+/_sales_order/delete
+      - umh/v1/+/+/+/_sales_order/delete
+      - umh/v1/+/+/+/+/_sales_order/delete
+      - umh/v1/+/+/+/+/+/_sales_order/delete
+      - umh/v1/+/+/+/+/+/+/_sales_order/delete
+      # --- _sales_item ---
+      - umh/v1/+/_sales_item/process
+      - umh/v1/+/+/_sales_item/process
+      - umh/v1/+/+/+/_sales_item/process
+      - umh/v1/+/+/+/+/_sales_item/process
+      - umh/v1/+/+/+/+/+/_sales_item/process
+      - umh/v1/+/+/+/+/+/+/_sales_item/process
+      - umh/v1/+/_sales_item/delete
+      - umh/v1/+/+/_sales_item/delete
+      - umh/v1/+/+/+/_sales_item/delete
+      - umh/v1/+/+/+/+/_sales_item/delete
+      - umh/v1/+/+/+/+/+/_sales_item/delete
+      - umh/v1/+/+/+/+/+/+/_sales_item/delete
+      # --- _work_order ---
+      - umh/v1/+/_work_order/process
+      - umh/v1/+/+/_work_order/process
+      - umh/v1/+/+/+/_work_order/process
+      - umh/v1/+/+/+/+/_work_order/process
+      - umh/v1/+/+/+/+/+/_work_order/process
+      - umh/v1/+/+/+/+/+/+/_work_order/process
+      - umh/v1/+/_work_order/delete
+      - umh/v1/+/+/_work_order/delete
+      - umh/v1/+/+/+/_work_order/delete
+      - umh/v1/+/+/+/+/_work_order/delete
+      - umh/v1/+/+/+/+/+/_work_order/delete
+      - umh/v1/+/+/+/+/+/+/_work_order/delete
+
+pipeline:
+  processors:
+    - bloblang: |
+        let mqtt_topic = meta("mqtt_topic").or("")
+        root = if $mqtt_topic == "" { deleted() } else { this }
+        meta umh_topic = $mqtt_topic.replace("/", ".")
+        meta umh_key = $mqtt_topic.split("/").index(-1)
+
+output:
+  uns: {}

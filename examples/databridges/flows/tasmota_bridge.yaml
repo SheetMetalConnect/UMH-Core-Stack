@@ -1,0 +1,68 @@
+# ==============================================================================
+# Tasmota Energy Bridge — Local MQTT → UNS
+# ==============================================================================
+# Bridges Tasmota power monitoring sensors from the local network into UNS.
+# Parses JSON SENSOR payload → individual _raw UNS messages per metric.
+#
+# Source: YOUR_MQTT_BROKER_IP:1883 (local network Mosquitto, no auth)
+# Devices: cabinet, siderack, desk (Tasmota power monitors)
+# Topic: tele/mycompany/hq/tasmota/{device}/SENSOR
+#
+# UNS mapping:
+#   tele/mycompany/hq/tasmota/siderack/SENSOR
+#   → umh.v1.mycompany.office.tasmota.siderack._raw.temperature = 29.7
+#   → umh.v1.mycompany.office.tasmota.siderack._raw.power = 125
+#   → umh.v1.mycompany.office.tasmota.siderack._raw.voltage = 231
+#   etc.
+#
+# Asset hierarchy created in TimescaleDB:
+#   enterprise=mycompany, site=hq, area=tasmota, line=siderack
+#   enterprise=mycompany, site=hq, area=tasmota, line=cabinet
+#   enterprise=mycompany, site=hq, area=tasmota, line=desk
+#
+# Deploy: Management Console → Data Flows → Stand-alone → Add
+#   Input field:  paste everything under "input:" (including "input:")
+#   Pipeline field: paste everything under "pipeline:" (including "pipeline:")
+#   Output field: paste everything under "output:" (including "output:")
+# ==============================================================================
+
+input:
+  mqtt:
+    auto_replay_nacks: false
+    client_id: tasmota_bridge
+    dynamic_client_id_suffix: nanoid
+    urls:
+      - tcp://YOUR_MQTT_BROKER_IP:1883
+    topics:
+      - tele/mycompany/hq/tasmota/+/SENSOR
+
+pipeline:
+  processors:
+    # Explode one JSON SENSOR message into individual _raw values
+    - bloblang: |
+        let topic = meta("mqtt_topic")
+        let device = $topic.split("/").index(4)
+        let prefix = "umh.v1.mycompany.office.tasmota." + $device + "._raw"
+
+        root = [
+          {"umh_topic": $prefix + ".temperature", "value": this.ANALOG.Temperature.catch(null)},
+          {"umh_topic": $prefix + ".power", "value": this.ENERGY.Power.catch(null)},
+          {"umh_topic": $prefix + ".voltage", "value": this.ENERGY.Voltage.catch(null)},
+          {"umh_topic": $prefix + ".current", "value": this.ENERGY.Current.catch(null)},
+          {"umh_topic": $prefix + ".energy_total_kwh", "value": this.ENERGY.Total.catch(null)},
+          {"umh_topic": $prefix + ".energy_today_kwh", "value": this.ENERGY.Today.catch(null)},
+          {"umh_topic": $prefix + ".power_factor", "value": this.ENERGY.Factor.catch(null)},
+          {"umh_topic": $prefix + ".apparent_power", "value": this.ENERGY.ApparentPower.catch(null)},
+          {"umh_topic": $prefix + ".reactive_power", "value": this.ENERGY.ReactivePower.catch(null)},
+        ].filter(v -> v.value != null)
+
+    - unarchive:
+        format: json_array
+
+    # Set UNS topic metadata and extract bare value
+    - bloblang: |
+        meta umh_topic = this.umh_topic
+        root = this.value
+
+output:
+  uns: {}

@@ -1,0 +1,39 @@
+# ==============================================================================
+# OPC-UA Bridge — OPC-UA Server → UNS
+# ==============================================================================
+# Connects to an OPC-UA server and subscribes to tag changes.
+# Publishes each tag as a separate _raw message in the UNS.
+#
+# Configuration:
+#   - Set endpoint (line 16)
+#   - Set nodeIDs to subscribe to (line 17+)
+#   - Set location_path to your ISA-95 hierarchy (line 27)
+#
+# Finding nodeIDs:
+#   Use UaExpert, Prosys OPC-UA Browser, or the UMH Management Console
+#   bridge wizard to browse the OPC-UA server's address space.
+#
+# Deploy: Management Console → Data Flows → Stand-alone → Add
+# ==============================================================================
+
+input:
+  opcua:
+    endpoint: "opc.tcp://YOUR_OPCUA_SERVER_IP:4840"
+    nodeIDs:
+      - "ns=2;s=temperature"
+      - "ns=2;s=pressure"
+      - "ns=2;s=state"
+    subscribeEnabled: true
+
+pipeline:
+  processors:
+    - bloblang: |
+        # Set your ISA-95 location path: enterprise.site.area.line
+        meta location_path = "mycompany.factory1.area1.machine1"
+        meta data_contract = "_raw"
+        meta tag_name = meta("opcua_tag_name").or("unknown")
+        meta timestamp_ms = (now().ts_unix_milli()).string()
+        root = this
+
+output:
+  uns: {}

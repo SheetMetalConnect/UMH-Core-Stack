@@ -1,0 +1,86 @@
+# ==============================================================================
+# Historian Flow — UNS _raw → TimescaleDB
+# ==============================================================================
+# Persists ALL _raw UNS data to TimescaleDB (numeric → tag, text → tag_string).
+# Deployed for the UNS course to capture metalfab, solar, weather, and energy
+# price data flowing through the UNS.
+#
+# Requires:
+#   - get_asset_id() function in TimescaleDB
+#   - DB_DSN env var set in UMH Core
+# ==============================================================================
+
+input:
+  uns:
+    umh_topic: "umh\\.v1\\..+\\._raw\\..+"
+    consumer_group: historian-v2
+
+pipeline:
+  processors:
+    - bloblang: |
+        let umh_topic = meta("umh_topic")
+        let parts = $umh_topic.split(".")
+
+        # Find _raw position by scanning
+        let raw_idx = -1
+        let raw_idx = if $parts.index(0).catch("") == "_raw" { 0 } else { $raw_idx }
+        let raw_idx = if $parts.index(1).catch("") == "_raw" { 1 } else { $raw_idx }
+        let raw_idx = if $parts.index(2).catch("") == "_raw" { 2 } else { $raw_idx }
+        let raw_idx = if $parts.index(3).catch("") == "_raw" { 3 } else { $raw_idx }
+        let raw_idx = if $parts.index(4).catch("") == "_raw" { 4 } else { $raw_idx }
+        let raw_idx = if $parts.index(5).catch("") == "_raw" { 5 } else { $raw_idx }
+        let raw_idx = if $parts.index(6).catch("") == "_raw" { 6 } else { $raw_idx }
+        let raw_idx = if $parts.index(7).catch("") == "_raw" { 7 } else { $raw_idx }
+        let raw_idx = if $parts.index(8).catch("") == "_raw" { 8 } else { $raw_idx }
+        let raw_idx = if $parts.index(9).catch("") == "_raw" { 9 } else { $raw_idx }
+
+        root = if $raw_idx < 0 { deleted() } else { this }
+
+        # Location: everything between "v1" (index 1) and "_raw"
+        let loc_parts = $parts.slice(2, $raw_idx)
+
+        # Tag name: everything after _raw, joined with dots
+        let tag_parts = $parts.slice($raw_idx + 1)
+        meta tag_name = $tag_parts.join(".")
+
+        # ISA-95 hierarchy (6 levels for get_asset_id)
+        meta enterprise = $loc_parts.index(0).catch("")
+        meta site = $loc_parts.index(1).catch("")
+        meta area = $loc_parts.index(2).catch("")
+        meta line = $loc_parts.index(3).catch("")
+        meta workcell = $loc_parts.index(4).catch("")
+        meta origin_id = $loc_parts.index(5).catch("")
+
+    - bloblang: |
+        let val = this.value.catch(this)
+        let is_numeric = $val.type() == "number" || $val.type() == "bool" || ($val.type() == "string" && $val.re_match("^-?[0-9]+(\\.[0-9]+)?$"))
+        meta is_numeric = if $is_numeric { "true" } else { "false" }
+        root.tag_name = meta("tag_name")
+        # Cast bool → 0/1 so .number() doesn't fail
+        root.value = if $val.type() == "bool" { if $val { 1 } else { 0 } } else { $val }
+
+output:
+  switch:
+    cases:
+      - check: meta("is_numeric") == "true"
+        output:
+          sql_raw:
+            driver: postgres
+            dsn: ${DB_DSN}
+            query: |
+              INSERT INTO tag (time, asset_id, tag_name, value, origin)
+              VALUES (NOW(), get_asset_id($1, $2, $3, $4, $5, $6), $7, $8, 'uns')
+            args_mapping: |
+              [ meta("enterprise"), meta("site"), meta("area"), meta("line"), meta("workcell"), meta("origin_id"), this.tag_name, this.value.number() ]
+            max_in_flight: 64
+
+      - output:
+          sql_raw:
+            driver: postgres
+            dsn: ${DB_DSN}
+            query: |
+              INSERT INTO tag_string (time, asset_id, tag_name, value, origin)
+              VALUES (NOW(), get_asset_id($1, $2, $3, $4, $5, $6), $7, $8, 'uns')
+            args_mapping: |
+              [ meta("enterprise"), meta("site"), meta("area"), meta("line"), meta("workcell"), meta("origin_id"), this.tag_name, this.value.string() ]
+            max_in_flight: 64

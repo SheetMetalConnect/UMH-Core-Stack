@@ -1,0 +1,30 @@
+# ==============================================================================
+# MetalFab UNS Simulator (Optional Addon)
+# ==============================================================================
+# Simulates 22 machines across 3 sites publishing to the UMH Unified Namespace.
+# Publishes _raw sensor data that the historian flow persists to TimescaleDB.
+#
+# Usage:
+#   docker compose -f docker-compose.yaml -f examples/simulator/docker-compose.simulator.yaml up -d
+#
+# Data flow:
+#   Simulator → HiveMQ (MQTT) → UMH Core (UNS) → historian flow → TimescaleDB → Grafana
+#
+# Source: https://github.com/SheetMetalConnect/metalfab-uns-simulator
+# ==============================================================================
+
+services:
+  simulator:
+    image: ghcr.io/sheetmetalconnect/metalfab-uns-simulator:latest
+    build:
+      context: https://github.com/SheetMetalConnect/metalfab-uns-simulator.git
+      dockerfile: Dockerfile
+    container_name: metalfab-simulator
+    restart: unless-stopped
+    environment:
+      - MQTT_BROKER=hivemq
+      - MQTT_PORT=1883
+    command: ["run", "--broker", "hivemq", "--level", "2"]
+    depends_on:
+      hivemq:
+        condition: service_healthy

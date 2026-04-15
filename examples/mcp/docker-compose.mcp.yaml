@@ -1,0 +1,58 @@
+# UMH Core MCP (Model Context Protocol) Addon
+# FAST CLIENT DEPLOYMENT: Just the essentials that work reliably
+#
+# Usage (if you want MCP without the default stack):
+# docker compose -f docker-compose.yaml -f examples/mcp/docker-compose.mcp.yaml up -d
+#
+# What this gives you:
+# - PostgreSQL MCP for live database queries (port 3003)
+# - Direct API access to Node-RED (port 1880) and Grafana (port 3000)
+# - Documentation context via user-scoped MCP (see CLAUDE.md)
+
+services:
+  # ============================================================================
+  # PostgreSQL MCP - Direct Database Access for AI
+  # ============================================================================
+  postgres-mcp:
+    image: docker.io/crystaldba/postgres-mcp:latest
+    restart: unless-stopped
+
+    environment:
+      # Connect to TimescaleDB via PgBouncer (read-only user)
+      - DATABASE_URL=postgresql://${HISTORIAN_READER_USER:-grafanareader}:${HISTORIAN_READER_PASSWORD:-changeme}@pgbouncer:5432/${POSTGRES_DB:-umh}
+      - DATABASE_URI=postgresql://${HISTORIAN_READER_USER:-grafanareader}:${HISTORIAN_READER_PASSWORD:-changeme}@pgbouncer:5432/${POSTGRES_DB:-umh}
+      - PORT=${MCP_POSTGRES_PORT:-3003}
+      - ACCESS_MODE=${MCP_POSTGRES_ACCESS:-restricted}
+
+    ports:
+      - "${MCP_POSTGRES_PORT:-3003}:3003"
+
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+    # Simple health check
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3003",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# ==============================================================================
+# Fast Deployment Notes
+# ==============================================================================
+# This minimal addon provides:
+# 1. Containerized PostgreSQL MCP (works out-of-box)
+# 2. Direct API access to existing Node-RED/Grafana services
+# 3. Documentation context (configure once, works everywhere)
+#
+# No complex client-side setup needed for database access!

@@ -1,0 +1,85 @@
+# ==============================================================================
+# Generic TimescaleDB Delete Handler
+# ==============================================================================
+# Receives .delete messages from UNS, resolves asset_id, and deletes the
+# matching row from the appropriate entity table using a switch/case.
+#
+# Paste into: UMH Core UI → Data Flows → New → Benthos
+# Name:       generic_timescale_delete
+#
+# To add a new entity: add a switch case with the DELETE query.
+#
+# Key patterns:
+#   - asset_id != null guard to drop unresolvable messages
+#   - .slice(2) for topic parsing (NOT .slice(2, -1) which drops last segment)
+#   - switch/case output to route to correct table
+# ==============================================================================
+
+input:
+  uns:
+    umh_topics:
+      - "umh\\.v1\\..*\\._(sales_order|sales_item|work_order)\\.delete"
+    consumer_group: generic_timescale_delete
+
+pipeline:
+  processors:
+    - bloblang: |
+        let action = meta("umh_topic").split(".").index(-1)
+        root = if $action == "delete" { this } else { deleted() }
+
+    # Resolve asset_id from topic path
+    - branch:
+        processors:
+          - bloblang: |
+              let umh_topic = meta("umh_topic")
+              let entity = $umh_topic.split(".").index(-2)
+              let parts = $umh_topic.split(entity).index(0).split(".").slice(2)
+              root.enterprise = $parts.index(0).catch("")
+              root.site = $parts.index(1).catch("")
+              root.area = $parts.index(2).catch("")
+              root.line = $parts.index(3).catch("")
+
+          - sql_select:
+              driver: postgres
+              dsn: ${DB_DSN}
+              table: asset
+              columns: [id]
+              where: enterprise = $1 AND site = $2 AND area = $3 AND line = $4
+              args_mapping: "[ this.enterprise, this.site, this.area, this.line ]"
+
+          - bloblang: |
+              root.asset_id = if this.type() == "array" && this.length() > 0 {
+                this.index(0).id
+              } else if this.type() == "object" && this.id != null {
+                this.id
+              } else {
+                null
+              }
+        result_map: root.asset_id = this.asset_id
+
+    - bloblang: root = if this.asset_id != null { this } else { deleted() }
+
+output:
+  switch:
+    cases:
+      - check: meta("umh_topic").split(".").index(-2) == "_sales_order"
+        output:
+          sql_raw:
+            driver: postgres
+            dsn: ${DB_DSN}
+            args_mapping: root = [this.order_id, this.asset_id]
+            query: DELETE FROM erp_sales_orders WHERE order_id = $1 AND asset_id = $2;
+      - check: meta("umh_topic").split(".").index(-2) == "_sales_item"
+        output:
+          sql_raw:
+            driver: postgres
+            dsn: ${DB_DSN}
+            args_mapping: root = [this.item_id, this.asset_id]
+            query: DELETE FROM erp_sales_items WHERE item_id = $1 AND asset_id = $2;
+      - check: meta("umh_topic").split(".").index(-2) == "_work_order"
+        output:
+          sql_raw:
+            driver: postgres
+            dsn: ${DB_DSN}
+            args_mapping: root = [this.work_order_id, this.asset_id]
+            query: DELETE FROM erp_work_orders WHERE work_order_id = $1 AND asset_id = $2;

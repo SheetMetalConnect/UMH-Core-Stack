@@ -1,0 +1,609 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "type": "row",
+      "title": "Laser Cutter (laser_01)",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Laser \u2014 Current State",
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT t.value AS \"State\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE a.line = 'laser_01' AND a.enterprise = 'metalfab'\n  AND t.tag_name = 'state'\nORDER BY t.time DESC\nLIMIT 1;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "STOPPED",
+                  "color": "red",
+                  "index": 0
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "2": {
+                  "text": "IDLE",
+                  "color": "yellow",
+                  "index": 1
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "3": {
+                  "text": "EXECUTE",
+                  "color": "green",
+                  "index": 2
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "5": {
+                  "text": "HELD",
+                  "color": "orange",
+                  "index": 3
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 2
+              },
+              {
+                "color": "green",
+                "value": 3
+              },
+              {
+                "color": "orange",
+                "value": 5
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "gauge",
+      "title": "Laser \u2014 Laser Power",
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT t.value AS \"Laser Power\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE a.line = 'laser_01' AND a.enterprise = 'metalfab'\n  AND t.tag_name = 'laser_power'\nORDER BY t.time DESC\nLIMIT 1;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Laser \u2014 Power & Cutting Speed",
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 1
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT\n  time_bucket('30 seconds', t.time) AS time,\n  avg(t.value) AS \"laser_power\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE $__timeFilter(t.time)\n  AND a.line = 'laser_01' AND a.enterprise = 'metalfab'\n  AND t.tag_name = 'laser_power'\nGROUP BY 1\nORDER BY 1;",
+          "format": "time_series",
+          "refId": "A"
+        },
+        {
+          "rawSql": "SELECT\n  time_bucket('30 seconds', t.time) AS time,\n  avg(t.value) AS \"cutting_speed\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE $__timeFilter(t.time)\n  AND a.line = 'laser_01' AND a.enterprise = 'metalfab'\n  AND t.tag_name = 'cutting_speed'\nGROUP BY 1\nORDER BY 1;",
+          "format": "time_series",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Laser \u2014 OEE Metrics",
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT\n  time_bucket('30 seconds', t.time) AS time,\n  t.tag_name AS metric,\n  avg(t.value) AS value\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE $__timeFilter(t.time)\n  AND a.line = 'laser_01' AND a.enterprise = 'metalfab'\n  AND t.tag_name IN ('oee.availability', 'oee.quality', 'oee.performance', 'oee.oee')\nGROUP BY 1, 2\nORDER BY 1;",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Press Brake (press_brake_01)",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 7
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Press Brake \u2014 Current State",
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT t.value AS \"State\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE a.line = 'press_brake_01' AND a.enterprise = 'metalfab'\n  AND t.tag_name = 'state'\nORDER BY t.time DESC\nLIMIT 1;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "STOPPED",
+                  "color": "red",
+                  "index": 0
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "2": {
+                  "text": "IDLE",
+                  "color": "yellow",
+                  "index": 1
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "3": {
+                  "text": "EXECUTE",
+                  "color": "green",
+                  "index": 2
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "5": {
+                  "text": "HELD",
+                  "color": "orange",
+                  "index": 3
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 2
+              },
+              {
+                "color": "green",
+                "value": 3
+              },
+              {
+                "color": "orange",
+                "value": 5
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "gauge",
+      "title": "Press Brake \u2014 Tonnage",
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 4,
+        "y": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT t.value AS \"Tonnage\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE a.line = 'press_brake_01' AND a.enterprise = 'metalfab'\n  AND t.tag_name = 'tonnage'\nORDER BY t.time DESC\nLIMIT 1;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 250,
+          "unit": "ton",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 150
+              },
+              {
+                "color": "red",
+                "value": 220
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Press Brake \u2014 Tonnage & Bend Angle",
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT\n  time_bucket('30 seconds', t.time) AS time,\n  avg(t.value) AS \"tonnage\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE $__timeFilter(t.time)\n  AND a.line = 'press_brake_01' AND a.enterprise = 'metalfab'\n  AND t.tag_name = 'tonnage'\nGROUP BY 1\nORDER BY 1;",
+          "format": "time_series",
+          "refId": "A"
+        },
+        {
+          "rawSql": "SELECT\n  time_bucket('30 seconds', t.time) AS time,\n  avg(t.value) AS \"bend_angle\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE $__timeFilter(t.time)\n  AND a.line = 'press_brake_01' AND a.enterprise = 'metalfab'\n  AND t.tag_name = 'bend_angle'\nGROUP BY 1\nORDER BY 1;",
+          "format": "time_series",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Press Brake \u2014 OEE Metrics",
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT\n  time_bucket('30 seconds', t.time) AS time,\n  t.tag_name AS metric,\n  avg(t.value) AS value\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE $__timeFilter(t.time)\n  AND a.line = 'press_brake_01' AND a.enterprise = 'metalfab'\n  AND t.tag_name IN ('oee.availability', 'oee.quality', 'oee.performance', 'oee.oee')\nGROUP BY 1, 2\nORDER BY 1;",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "State Change History",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT\n  ts.time AS \"Time\",\n  a.line AS \"Machine\",\n  ts.tag_name AS \"Tag\",\n  ts.value AS \"State\"\nFROM tag_string ts\nJOIN asset a ON a.id = ts.asset_id\nWHERE $__timeFilter(ts.time)\n  AND a.enterprise = 'metalfab'\n  AND ts.tag_name = 'state_name'\nORDER BY ts.time DESC\nLIMIT 100;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Time",
+            "desc": true
+          }
+        ]
+      }
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": [
+    "metalfab",
+    "production"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "MetalFab Machines",
+  "uid": "metalfab-machines",
+  "version": 1
+}

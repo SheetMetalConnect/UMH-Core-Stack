@@ -1,0 +1,74 @@
+# ==============================================================================
+# ERP Entity to TimescaleDB Persistence — TEMPLATE
+# ==============================================================================
+# Persists .create and .update messages with upsert + history tracking.
+# Uses CTE pattern: INSERT ... ON CONFLICT → history table in one query.
+#
+# To adapt for your entity:
+#   1. Replace ENTITY_NAME with your entity (e.g., sales_order, work_order)
+#   2. Replace TABLE_NAME with your DB table (e.g., erp_sales_orders)
+#   3. Replace PRIMARY_KEY with your entity's ID column (e.g., order_id)
+#   4. Replace COLUMNS with your entity's column list
+#   5. Replace ARGS with matching args_mapping entries
+#
+# Tables required:
+#   - TABLE_NAME (current state, upsert on PRIMARY_KEY + asset_id)
+#   - TABLE_NAME_history (audit trail, append-only)
+#
+# Key patterns:
+#   - asset_id != null guard to drop unresolvable messages
+#   - CTE upsert + history insert in single query (atomic)
+#   - max_in_flight: 20 (matches PgBouncer default_pool_size)
+#
+# Deploy: Management Console → Data Flows → Stand-alone → Add
+# ==============================================================================
+
+input:
+  uns:
+    umh_topics:
+      - "umh\\.v1\\..*\\._ENTITY_NAME\\.create"
+      - "umh\\.v1\\..*\\._ENTITY_NAME\\.update"
+    consumer_group: ENTITY_NAME_to_timescale
+
+pipeline:
+  processors:
+    - bloblang: |
+        let action = meta("umh_topic").split(".").index(-1)
+        root = if $action == "create" || $action == "update" { this } else { deleted() }
+
+    - bloblang: root = if this.asset_id != null { this } else { deleted() }
+
+output:
+  sql_raw:
+    driver: postgres
+    dsn: ${DB_DSN}
+    query: |
+      WITH upserted AS (
+        INSERT INTO TABLE_NAME (
+          PRIMARY_KEY, asset_id, COLUMNS,
+          timestamp_ms, change_type
+        )
+        VALUES ($1, $2, ... , $N-1, $N)
+        ON CONFLICT (PRIMARY_KEY, asset_id) DO UPDATE SET
+          COLUMNS = EXCLUDED.COLUMNS,
+          timestamp_ms = EXCLUDED.timestamp_ms,
+          change_type = EXCLUDED.change_type
+        RETURNING *
+      )
+      INSERT INTO TABLE_NAME_history (
+        PRIMARY_KEY, asset_id, COLUMNS,
+        timestamp_ms, change_type
+      )
+      SELECT
+        PRIMARY_KEY, asset_id, COLUMNS,
+        timestamp_ms, change_type
+      FROM upserted;
+    args_mapping: |
+      [
+        this.PRIMARY_KEY,
+        this.asset_id,
+        ... your fields here ...,
+        this.timestamp_ms,
+        meta("umh_topic").split(".").index(-1).uppercase()
+      ]
+    max_in_flight: 20

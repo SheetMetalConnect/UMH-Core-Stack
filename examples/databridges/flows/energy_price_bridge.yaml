@@ -1,0 +1,48 @@
+# ==============================================================================
+# Energy Spot Price HTTP Bridge → UNS
+# ==============================================================================
+# Polls the energy price REST API simulator every 60 seconds and publishes
+# each field as a separate _raw tag in the UNS.
+#
+# Target topic: umh.v1.mycompany.factory1.energy_price._raw.*
+# API endpoint: http://95.217.14.139:8085/api/energy/current
+#
+# Tags: price_eur_mwh, price_eur_kwh, trend, day_average_eur_mwh
+# ==============================================================================
+
+input:
+  generate:
+    interval: "60s"
+    mapping: |
+      root = ""
+
+pipeline:
+  processors:
+    # Fetch energy price data from REST API
+    - http:
+        url: "http://95.217.14.139:8085/api/energy/current"
+        verb: GET
+
+    # Fan out: convert JSON object into array of {tag_name, value} pairs
+    - bloblang: |
+        let data = this
+        let tags = ["price_eur_mwh", "price_eur_kwh", "trend", "day_average_eur_mwh"]
+        root = $tags.map_each(tag -> {
+          "tag_name": tag,
+          "value": $data.get(tag).catch(null),
+          "timestamp_ms": now().ts_unix_milli()
+        }).filter(item -> item.value != null)
+
+    - unarchive:
+        format: json_array
+
+    # Set UNS metadata for routing
+    - bloblang: |
+        meta location_path = "mycompany.factory1.energy_price"
+        meta data_contract = "_raw"
+        meta tag_name = this.tag_name
+        root.value = this.value
+        root.timestamp_ms = this.timestamp_ms
+
+output:
+  uns: {}

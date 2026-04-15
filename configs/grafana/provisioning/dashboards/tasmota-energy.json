@@ -1,0 +1,749 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "type": "row",
+      "title": "Current Power",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Desk \u2014 Power (W)",
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 1
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT t.value AS \"Power\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE a.line = 'desk' AND a.enterprise = 'mycompany'\n  AND t.tag_name = 'power'\nORDER BY t.time DESC\nLIMIT 1;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 200
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Siderack \u2014 Power (W)",
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 1
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT t.value AS \"Power\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE a.line = 'siderack' AND a.enterprise = 'mycompany'\n  AND t.tag_name = 'power'\nORDER BY t.time DESC\nLIMIT 1;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 200
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Cabinet \u2014 Power (W)",
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT t.value AS \"Power\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE a.line = 'cabinet' AND a.enterprise = 'mycompany'\n  AND t.tag_name = 'power'\nORDER BY t.time DESC\nLIMIT 1;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 200
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Current Voltage",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Desk \u2014 Voltage (V)",
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 6
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT t.value AS \"Voltage\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE a.line = 'desk' AND a.enterprise = 'mycompany'\n  AND t.tag_name = 'voltage'\nORDER BY t.time DESC\nLIMIT 1;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "volt",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 210
+              },
+              {
+                "color": "green",
+                "value": 225
+              },
+              {
+                "color": "yellow",
+                "value": 245
+              },
+              {
+                "color": "red",
+                "value": 255
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Siderack \u2014 Voltage (V)",
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 6
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT t.value AS \"Voltage\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE a.line = 'siderack' AND a.enterprise = 'mycompany'\n  AND t.tag_name = 'voltage'\nORDER BY t.time DESC\nLIMIT 1;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "volt",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 210
+              },
+              {
+                "color": "green",
+                "value": 225
+              },
+              {
+                "color": "yellow",
+                "value": 245
+              },
+              {
+                "color": "red",
+                "value": 255
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Cabinet \u2014 Voltage (V)",
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 6
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT t.value AS \"Voltage\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE a.line = 'cabinet' AND a.enterprise = 'mycompany'\n  AND t.tag_name = 'voltage'\nORDER BY t.time DESC\nLIMIT 1;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "volt",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 210
+              },
+              {
+                "color": "green",
+                "value": 225
+              },
+              {
+                "color": "yellow",
+                "value": 245
+              },
+              {
+                "color": "red",
+                "value": 255
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Current Temperature",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Desk \u2014 Temperature (\u00b0C)",
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 11
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT t.value AS \"Temperature\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE a.line = 'desk' AND a.enterprise = 'mycompany'\n  AND t.tag_name = 'temperature'\nORDER BY t.time DESC\nLIMIT 1;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 15
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 40
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Siderack \u2014 Temperature (\u00b0C)",
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 11
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT t.value AS \"Temperature\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE a.line = 'siderack' AND a.enterprise = 'mycompany'\n  AND t.tag_name = 'temperature'\nORDER BY t.time DESC\nLIMIT 1;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 15
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 40
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Cabinet \u2014 Temperature (\u00b0C)",
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 11
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT t.value AS \"Temperature\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE a.line = 'cabinet' AND a.enterprise = 'mycompany'\n  AND t.tag_name = 'temperature'\nORDER BY t.time DESC\nLIMIT 1;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 15
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 40
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Power (W) Over Time",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT\n  time_bucket('30 seconds', t.time) AS time,\n  a.line AS metric,\n  avg(t.value) AS \"Power\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE $__timeFilter(t.time)\n  AND a.enterprise = 'mycompany'\n  AND t.tag_name = 'power'\nGROUP BY 1, 2\nORDER BY 1;",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Voltage (V) Over Time",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 23
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT\n  time_bucket('30 seconds', t.time) AS time,\n  a.line AS metric,\n  avg(t.value) AS \"Voltage\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE $__timeFilter(t.time)\n  AND a.enterprise = 'mycompany'\n  AND t.tag_name = 'voltage'\nGROUP BY 1, 2\nORDER BY 1;",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "volt",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Temperature (\u00b0C) Over Time",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "umh-timescaledb"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT\n  time_bucket('30 seconds', t.time) AS time,\n  a.line AS metric,\n  avg(t.value) AS \"Temperature\"\nFROM tag t\nJOIN asset a ON a.id = t.asset_id\nWHERE $__timeFilter(t.time)\n  AND a.enterprise = 'mycompany'\n  AND t.tag_name = 'temperature'\nGROUP BY 1, 2\nORDER BY 1;",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": [
+    "tasmota",
+    "energy"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Tasmota Energy",
+  "uid": "tasmota-energy",
+  "version": 1
+}
