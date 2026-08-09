@@ -146,14 +146,14 @@ All services are reachable from the LAN via the host's IP and published ports:
 
 | Service | URL Pattern | Example |
 |---------|-------------|---------|
-| Node-RED | `http://<host-ip>:1880` | `http://192.168.1.100:1880` |
-| Grafana | `http://<host-ip>:3000` | `http://192.168.1.100:3000` |
-| Portainer | `http://<host-ip>:9000` | `http://192.168.1.100:9000` |
-| MQTT Broker | `mqtt://<host-ip>:1883` | `mqtt://192.168.1.100:1883` |
-| MQTT WebSocket | `ws://<host-ip>:8083/mqtt` | `ws://192.168.1.100:8083/mqtt` |
-| Webhook Endpoint | `http://<host-ip>:80` | `http://192.168.1.100:80` |
-| Database (via PgBouncer) | `postgresql://<host-ip>:5432` | `postgresql://192.168.1.100:5432/umh` |
-| Postgres MCP | `http://<host-ip>:3003` | `http://192.168.1.100:3003` |
+| Node-RED | `http://<host-ip>:1880` | `http://<ip-example>:1880` |
+| Grafana | `http://<host-ip>:3000` | `http://<ip-example>:3000` |
+| Portainer | `http://<host-ip>:9000` | `http://<ip-example>:9000` |
+| MQTT Broker | `mqtt://<host-ip>:1883` | `mqtt://<ip-example>:1883` |
+| MQTT WebSocket | `ws://<host-ip>:8083/mqtt` | `ws://<ip-example>:8083/mqtt` |
+| Webhook Endpoint | `http://<host-ip>:80` | `http://<ip-example>:80` |
+| Database (via PgBouncer) | `postgresql://<host-ip>:5432` | `postgresql://<ip-example>:5432/umh` |
+| Postgres MCP | `http://<host-ip>:3003` | `http://<ip-example>:3003` |
 
 ### Finding Your Host IP
 
